@@ -94,7 +94,7 @@ def trim_fastq(input_files, output_files, basename1, basename2, qc_folder, outpu
                         stderr_res])))
                                     
   with logger_mutex:
-    logger.debug(trim_fastq worked")
+    logger.debug("trim_fastq worked")
 #_______________________________________________________________________________________________________
 # 
 #              take trimmer output and align with hisat2
