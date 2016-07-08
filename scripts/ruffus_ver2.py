@@ -256,7 +256,7 @@ def cufflinks(input_file, output_file, path, qc_path):
     stdout_res, stderr_res = run_job(cmd,
                                       job_name,
                                       job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                      job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
+                                      job_other_options    = "-S /bin/bash -V -l h_rt=06:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
                                       job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                       retain_job_scripts   = True,
                                       working_directory    = "/home/sejjctj/Scratch",
