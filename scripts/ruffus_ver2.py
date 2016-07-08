@@ -42,7 +42,8 @@ drmaa_session = drmaa.Session()
 drmaa_session.initialize()
 #_________________________________________________________________________________
 #                                                                                .
-#   Group together file pairs and make directories                                                    .
+#   Group together file pairs and make directories                               .
+#   The first step trims and generates fastqc reports                            .
 #_________________________________________________________________________________
 @mkdir(original_data_files,
        #match input pattern
@@ -93,9 +94,11 @@ def trim_fastq(input_files, output_files, basename1, basename2, qc_folder, outpu
                         stderr_res])))
                                     
   with logger_mutex:
-    logger.debug("Hooray trim_fastq worked")
-
-# take trimmer output
+    logger.debug(trim_fastq worked")
+#_______________________________________________________________________________________________________
+# 
+#              take trimmer output and align with hisat2
+#_______________________________________________________________________________________________________
 reads_list = []
 @merge(trim_fastq,reads_list)
 def merge_trim_output(input_files,reads_list):
@@ -106,7 +109,7 @@ def merge_trim_output(input_files,reads_list):
     reads2.append(item[1])
   reads_list.append(reads1)
   reads_list.append(reads2)
-  #print reads_list
+  # simply flattens the read lists to create two lists for hisat
 
 #"([^/]+)R[12]_001.fastq.gz$"
 @transform(merge_trim_output,
@@ -117,20 +120,20 @@ def hisat2(input_files, output_file, path, qc_folder):
   def get_file_name_list(file_list):
     temp_list = []
     temp_file_list = []
-    for first_read in file_list:
-      temp_list = first_read.split('/')
-      temp_file_list.append(temp_list[-1])
+    for read_file in file_list:
+      temp_list.append(os.path.basename(read_file))
     return temp_file_list
-
+# above are getting the file name only
   first_reads_list = get_file_name_list(input_files[0])
   second_reads_list = get_file_name_list(input_files[1])
+  # use get_file_name_list function to get list of filenames
   first_reads = ','.join(first_reads_list)
   second_reads = ','.join(second_reads_list)
   hisat_output = output_file.split('/')
   hisat_output = hisat_output[-1]
   job_script_directory = "/home/sejjctj/Scratch/test_dir"
   cmd = "cd $TMPDIR; mkdir reference; cp " + path + "/*val*fq.gz" + " . ; cp $HOME/Scratch/reference/grch38/* ./reference ; hisat2 -x ./reference/genome --known-splicesite-infile ./reference/grch38.splices.txt --dta-cufflinks -1 " + first_reads + " -2 " + second_reads + "  2> " + qc_folder  + "/" + hisat_output + ".log | samtools view -bS - -o " + hisat_output + " ; cp " + hisat_output + " " + path + " ; rm -r *"         
-  print cmd
+  
   job_name = "hisat"
 
   try:
@@ -139,9 +142,7 @@ def hisat2(input_files, output_file, path, qc_folder):
                                       job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                       job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -l mem=4G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
                                       job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
-                                      retain_job_scripts   = True,
-                                      #touch_only           = True,
-                                      #run_locally          = True,
+                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                       working_directory    = "/home/sejjctj/Scratch",
                                       drmaa_session        = drmaa_session,
                                       logger = logger )
@@ -156,19 +157,23 @@ def hisat2(input_files, output_file, path, qc_folder):
 
   with logger_mutex:
     logger.debug("hisat worked")
-  #input2 = input_files[1]
-  #print input2
+#_______________________________________________________________________________________________________
+# 
+#              take trimmer output and run kallisto to get abundances
+#_______________________________________________________________________________________________________
 
 @transform(merge_trim_output,
-           formatter("([^/]+)L001_R[12]_001_val_[12].fq.gz$"), "{path[0]}/kallisto/abundance.tsv","{path[0]}", "{path[0]}/kallisto")
+           formatter("([^/]+)L001_R[12]_001_val_[12].fq.gz$"), 
+           "{path[0]}/kallisto/abundance.tsv","{path[0]}", 
+           "{path[0]}/kallisto")
 def kallisto(input_files, output_file, path, kallisto_folder):
   # flatten list
   list_of_reads = []
   reads_list = [item for sublist in input_files for item in sublist]
   for filename in reads_list:
-     list_of_reads.append(os.path.basename(filename))
+    list_of_reads.append(os.path.basename(filename))
   list_of_reads = ' '.join(list_of_reads)
-  #print list_of_reads
+  
   job_script_directory = "/home/sejjctj/Scratch/test_dir"
   
   cmd = "cd $TMPDIR; mkdir reference; cp " + path + "/*val*fq.gz" + " . ; cp $HOME/Scratch/reference/homo_transcripts.idx ./reference ; kallisto quant -b 100 -i ./reference/homo_transcripts.idx " + list_of_reads + " -o " + kallisto_folder +  " ; rm -r * ;"         
@@ -198,8 +203,10 @@ def kallisto(input_files, output_file, path, kallisto_folder):
 
   with logger_mutex:
     logger.debug("kallisto worked")
-  #input2 = input_files[1]
-  #print input2
+#_______________________________________________________________________________________________________
+# 
+#              samtools sort hisat output
+#_______________________________________________________________________________________________________
   
 @transform(hisat2,formatter("([^/]+)L001_R1_001_val_1.fq.bam$"), "{path[0]}/{basename[0]}.sorted.bam", "{basename[0]}", "{path[0]}")
 def sort(input_file, output_file, prefix, path):
@@ -209,7 +216,7 @@ def sort(input_file, output_file, prefix, path):
   job_script_directory = "/home/sejjctj/Scratch/test_dir"
   
   cmd = "cd $TMPDIR; cp " + input_file + " . ; samtools sort " + filename + " " + prefix + ".sorted ; cp " + prefix + ".sorted.bam " + path + " ; rm -r * "         
-  print cmd
+
   job_name = "sort"
    
   try:
@@ -219,8 +226,6 @@ def sort(input_file, output_file, prefix, path):
                                       job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -l mem=4G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
                                       job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                       retain_job_scripts   = True,
-                                      #touch_only           = True,
-                                      #run_locally          = True,
                                       working_directory    = "/home/sejjctj/Scratch",
                                       drmaa_session        = drmaa_session,
                                       logger = logger )
@@ -235,14 +240,16 @@ def sort(input_file, output_file, prefix, path):
 
   with logger_mutex:
     logger.debug("sort worked")
-  
+#_______________________________________________________________________________________________________
+# 
+#              cufflinks generate gtf files from sorted hisat output
+#_______________________________________________________________________________________________________
 
 @transform(sort,formatter("([^/]+)L001_R1_001_val_1.fq.sorted.bam$"), "{path[0]}/cufflinks/transcripts.gtf", "{path[0]}","{path[0]}/qc")
 def cufflinks(input_file, output_file, path, qc_path):
   filename = os.path.basename(input_file)
   job_script_directory = "/home/sejjctj/Scratch/test_dir"
-  cmd = "cd $TMPDIR; mkdir reference; cp " + input_file + " . ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38* ./reference  ; cufflinks -g ./reference/Homo_sapiens.GRCh38.76.gtf -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa " + filename + " -o " + path + "/cufflinks/ 2> " + qc_path + "/cufflinks.log ; rm -r * "
-  print cmd
+  cmd = "cd $TMPDIR; mkdir reference; cp " + input_file + " . ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38* ./reference  ; cufflinks -g ./reference/Homo_sapiens.GRCh38.76.gtf -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa " + filename + " -o " + path + "/cufflinks/ 2> " + qc_path + "/cufflinks.log ; rm -r * ;"
   job_name = "cufflinks"
 
   try:
@@ -252,8 +259,6 @@ def cufflinks(input_file, output_file, path, qc_path):
                                       job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -l mem=8G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
                                       job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                       retain_job_scripts   = True,
-                                      #touch_only           = True,
-                                      #run_locally          = True,
                                       working_directory    = "/home/sejjctj/Scratch",
                                       drmaa_session        = drmaa_session,
                                       logger = logger )
