@@ -249,14 +249,14 @@ def sort(input_file, output_file, prefix, path):
 def cufflinks(input_file, output_file, path, qc_path):
   filename = os.path.basename(input_file)
   job_script_directory = "/home/sejjctj/Scratch/test_dir"
-  cmd = "cd $TMPDIR; mkdir reference; cp " + input_file + " . ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38* ./reference  ; cufflinks -g ./reference/Homo_sapiens.GRCh38.76.gtf -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa " + filename + " -o " + path + "/cufflinks/ 2> " + qc_path + "/cufflinks.log ; rm -r * ;"
+  cmd = "cd $TMPDIR; mkdir reference; cp " + input_file + " . ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38* ./reference  ; cufflinks -p 4 -g ./reference/Homo_sapiens.GRCh38.76.gtf -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa " + filename + " -o " + path + "/cufflinks/ 2> " + qc_path + "/cufflinks.log ; rm -r * ;"
   job_name = "cufflinks"
 
   try:
     stdout_res, stderr_res = run_job(cmd,
                                       job_name,
                                       job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                      job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -l mem=8G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
+                                      job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
                                       job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                       retain_job_scripts   = True,
                                       working_directory    = "/home/sejjctj/Scratch",
