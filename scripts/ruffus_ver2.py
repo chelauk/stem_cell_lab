@@ -4,7 +4,7 @@ import sys, os
 from ruffus import *
 import ruffus.cmdline as cmdline
 from subprocess import check_call
-parser = cmdline.get_argparse(description="Parimala's pipeline?")
+parser = cmdline.get_argparse(description="Chela's Pipeline")
 
 #                                                                                 .
 #   Very flexible handling of input files                                         .
@@ -23,7 +23,7 @@ parser.add_argument('-i', '--input', nargs='+', metavar="FILE", action="append",
 options = parser.parse_args()
 
 #  standard python logger which can be synchronised across concurrent Ruffus tasks
-logger, logger_mutex = cmdline.setup_logging ("PARIMALA", options.log_file, options.verbose)
+logger, logger_mutex = cmdline.setup_logging ("Chela", options.log_file, options.verbose)
 
 #                                                                                .
 #   Useful code to turn input files into a flat list                             .
