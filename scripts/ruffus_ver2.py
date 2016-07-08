@@ -19,9 +19,12 @@ parser = cmdline.get_argparse(description="Chela's Pipeline")
 #           line lengths                                                          .
 #                                                                                 .
 parser.add_argument('-i', '--input', nargs='+', metavar="FILE", action="append", help = "Fastq files")
-
+#
+#    Add argument for where assembly text file required for cuffmerge is
+#
+parser.add_argument('--cuffmerge_dir', metavar="FILE", help = "cuffmerge assembbly file directory")
 options = parser.parse_args()
-
+cuffmerge_dir = options.cuffmerge_dir
 #  standard python logger which can be synchronised across concurrent Ruffus tasks
 logger, logger_mutex = cmdline.setup_logging ("Chela", options.log_file, options.verbose)
 
@@ -176,7 +179,7 @@ def kallisto(input_files, output_file, path, kallisto_folder):
   
   job_script_directory = "/home/sejjctj/Scratch/test_dir"
   
-  cmd = "cd $TMPDIR; mkdir reference; cp " + path + "/*val*fq.gz" + " . ; cp $HOME/Scratch/reference/homo_transcripts.idx ./reference ; kallisto quant -b 100 -i ./reference/homo_transcripts.idx " + list_of_reads + " -o " + kallisto_folder +  " ; rm -r * ;"         
+  cmd = "cd $TMPDIR; mkdir reference; cp " + path + "/*val*fq.gz" + " . ; cp $HOME/Scratch/reference/homo_transcripts.idx ./reference ; kallisto quant -b 100 -t 4 -i ./reference/homo_transcripts.idx " + list_of_reads + " -o " + kallisto_folder +  " ; rm -r * ;"         
   print cmd
   job_name = "kallisto"
   
@@ -184,7 +187,7 @@ def kallisto(input_files, output_file, path, kallisto_folder):
     stdout_res, stderr_res = run_job(cmd,
                                       job_name,
                                       job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                      job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -l mem=4G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
+                                      job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -l mem=4G -w n -pe smp 4 -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
                                       job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                       retain_job_scripts   = True,
                                       #touch_only           = True,
@@ -273,6 +276,30 @@ def cufflinks(input_file, output_file, path, qc_path):
 
   with logger_mutex:
     logger.debug("cufflinks worked")
+
+#_______________________________________________________________________________________________________
+# 
+#              cuffmerge, create assembly text for cuffmerge
+#_______________________________________________________________________________________________________
+
+
+# I can't think of any other way than  manually entering the cuffmerge assembly text file using @check_if_up_to_date
+'''
+@file(cuffmergedir"/assembly.txt",cuffmergedir"/assembly.txt")
+def assembly_check(input_file, output)
+  with open(input_file) as f:
+      pass
+
+@transform(assembly_check, formatter("([^/]+)assembly.txt$"), assembly_prefix".gtf", {path[0]})
+def cuffmerge
+'''
+
+
+  
+
+
+
+
 
 if __name__ == '__main__':
   cmdline.run (options)
