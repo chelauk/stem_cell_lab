@@ -295,13 +295,30 @@ def assembly_check(input_file, output):
 @transform(assembly_check, formatter(".txt$"), "{path[0]}/merged.gtf", "{path[0]}")
 def cuffmerge(input_file, output, outpath):
   
-  cmd = "cd $TMPDIR; cp " + input_file + " . ; while read -r i; do cp $i . ; ls *gtf > assembly.txt ; mkdir references ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa* .references ; cp Homo_sapiens.GRCh38.76.gtf ./references; cuffmerge -p 4  -g reference/Homo_sapiens.GRCh38.76.gtf -s reference/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa <assembly_GTF_list.txt> -o " + outpath + "/merged.gtf >2 " + outpath + "/cuffmerge.log ; rm -r * ;" 
+  cmd = "cd $TMPDIR; cp " + input_file + " . ; mkdirs.py ; ls */*/*gtf > assembly.txt ; mkdir references ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa* .references ; cp Homo_sapiens.GRCh38.76.gtf ./references; cuffmerge -p 4  -g reference/Homo_sapiens.GRCh38.76.gtf -s reference/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa  assembly.txt -o " + outpath + "/merged.gtf >2 " + outpath + "/cuffmerge.log ; rm -r * ;" 
   print cmd
-
-
+  job_name = "cuffmerge"
+  try:
+    stdout_res, stderr_res = run_job(cmd,
+                                      job_name,
+                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
+                                      job_other_options    = "-S /bin/bash -V -l h_rt=07:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
+                                      job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                      retain_job_scripts   = True,
+                                      working_directory    = "/home/sejjctj/Scratch",
+                                      drmaa_session        = drmaa_session,
+                                      logger = logger )
   
+  except error_drmaa_job as err:
+  raise Exception("\n".join(map(str,
+                      ["Failed to run:",
+                        cmd,
+                        err,
+                        stdout_res,
+                        stderr_res])))
 
-
+  with logger_mutex:
+    logger.debug("cuffmerge worked")
 
 
 
