@@ -285,13 +285,15 @@ def cufflinks(input_file, output_file, path, qc_path):
 
 # I can't think of any other way than  manually entering the cuffmerge assembly text file
 # convoluted way of checking if the assembly.txt file is available and providing it to cuffmerge
-@file(cuffmergedir"/assembly.txt",cuffmergedir"/assembly.txt")
-def assembly_check(input_file, output)
-  with open(input_file) as f:
-      pass
+@files( cuffmerge_dir + "assembly_list.txt", cuffmerge_dir + "assembly_list.txt")
+def assembly_check(input_file, output):
+  print input_file
+  pass
+  #with open(input_file, 'rw') as f:
+  #    pass
 
-@transform(assembly_check, formatter("([^/]+)assembly.txt$"), "{path[0]}"/"merged.gtf", "{path[0]}")
-def cuffmerge(input_file, output, outpath )
+@transform(assembly_check, formatter(".txt$"), "{path[0]}/merged.gtf", "{path[0]}")
+def cuffmerge(input_file, output, outpath):
   
   cmd = "cd $TMPDIR; cp " + input_file + " . ; while read -r i; do cp $i . ; ls *gtf > assembly.txt ; mkdir references ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa* .references ; cp Homo_sapiens.GRCh38.76.gtf ./references; cuffmerge -p 4  -g reference/Homo_sapiens.GRCh38.76.gtf -s reference/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa <assembly_GTF_list.txt> -o " + outpath + "/merged.gtf >2 " + outpath + "/cuffmerge.log ; rm -r * ;" 
   print cmd
