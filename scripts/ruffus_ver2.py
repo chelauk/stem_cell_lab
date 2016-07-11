@@ -310,7 +310,7 @@ def cuffmerge(input_file, output, outpath):
                                       logger = logger )
   
   except error_drmaa_job as err:
-  raise Exception("\n".join(map(str,
+    raise Exception("\n".join(map(str,
                       ["Failed to run:",
                         cmd,
                         err,
