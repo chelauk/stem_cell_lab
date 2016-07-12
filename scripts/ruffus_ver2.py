@@ -295,8 +295,9 @@ def assembly_check(input_file, output):
 @transform(assembly_check, formatter(".txt$"), "{path[0]}/merged.gtf", "{path[0]}")
 def cuffmerge(input_file, output, outpath):
   
-  cmd = "cd $TMPDIR; cp " + input_file + " . ; mkdirs.py ; ls */*/*gtf > assembly.txt ; mkdir references ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa* .references ; cp Homo_sapiens.GRCh38.76.gtf ./references; cuffmerge -p 4  -g reference/Homo_sapiens.GRCh38.76.gtf -s reference/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa  assembly.txt -o " + outpath + "/merged.gtf >2 " + outpath + "/cuffmerge.log ; rm -r * ;" 
+  cmd = "cd $TMPDIR; cp " + input_file + " . ; make_dirs.py 2> " + outpath + "/cuffmerge.log ; ls */*/*gtf > assembly.txt ; mkdir references ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa* .references ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.76.gtf ./references; cuffmerge -p 4  -g ./references/Homo_sapiens.GRCh38.76.gtf -s ./references/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa assembly.txt -o " + outpath + " 2>>  " + outpath + "/cuffmerge.log ; rm -r * ;" 
   print cmd
+  print outpath
   job_name = "cuffmerge"
   try:
     stdout_res, stderr_res = run_job(cmd,
@@ -310,7 +311,7 @@ def cuffmerge(input_file, output, outpath):
                                       logger = logger )
   
   except error_drmaa_job as err:
-  raise Exception("\n".join(map(str,
+    raise Exception("\n".join(map(str,
                       ["Failed to run:",
                         cmd,
                         err,
