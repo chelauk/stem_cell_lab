@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-import sys, os
-
+import glob
+import sys, os, fnmatch
+import re
 from ruffus import *
 import ruffus.cmdline as cmdline
 from subprocess import check_call
@@ -22,9 +23,13 @@ parser.add_argument('-i', '--input', nargs='+', metavar="FILE", action="append",
 #
 #    Add argument for where assembly text file required for cuffmerge is
 #
-parser.add_argument('--cuffmerge_dir', metavar="FILE", help = "cuffmerge assembbly file directory")
+parser.add_argument('--cuffdiff_file', metavar="FILE", help = "cuffdiff comparison instructions")
+parser.add_argument('--basedir', metavar="DIR", help = "base directory")
+
 options = parser.parse_args()
-cuffmerge_dir = options.cuffmerge_dir
+cuffdiff_file = options.cuffdiff_file
+basedir=options.basedir
+# working directory
 #  standard python logger which can be synchronised across concurrent Ruffus tasks
 logger, logger_mutex = cmdline.setup_logging ("Chela", options.log_file, options.verbose)
 
@@ -50,35 +55,35 @@ drmaa_session.initialize()
 #_________________________________________________________________________________
 @mkdir(original_data_files,
        #match input pattern
-        formatter("([^/]+)R[12]_001.fastq.gz$"),
+        formatter("([^/]+)$"),
         # make qc directory
-        "{path[0]}/qc")
+        ["{subpath[0][1]}/qc",
+        # make trimmed_directory)
+        "{subpath[0][1]}/fastq_trimmed",
+        "{subpath[0][1]}/bam",
+        "{subpath[0][1]}/kallisto",
+        "{subpath[0][1]}/cufflinks",
+        "{subpath[0][3]}/cuffmerge_out"])
 @collate(original_data_files,
-            # match file name up to the "R1.fastq.gz"
-            formatter("([^/]+)R[12]_001.fastq.gz$"),
-            # Create output parameter supplied to next task
-            ["{path[0]}/{1[0]}R1_001_val_1.fq.gz",  # paired file 1
-             "{path[0]}/{1[0]}R2_001_val_2.fq.gz"], # paired file 2
-            # Extra parameters qc folder
-            "{1[0]}R1_001.fastq.gz", "{1[0]}R2_001.fastq.gz","{path[0]}/qc",
-            "{path[0]}",
-            logger, logger_mutex)
-def trim_fastq(input_files, output_files, basename1, basename2, qc_folder, output_folder , logger, logger_mutex):
+        formatter("([^/]+)R[12]_001.fastq.gz$"),
+              ["{subpath[0][1]}/fastq_trimmed/{1[0]}R1_001_val_1.fq.gz",  # paired file 1
+              "{subpath[0][1]}/fastq_trimmed/{1[0]}R2_001_val_2.fq.gz"],  # paired file 1
+              "{1[0]}R1_001.fastq.gz", "{1[0]}R2_001.fastq.gz","{subpath[0][1]}/qc",
+             "{subpath[0][1]}/fastq_trimmed", logger, logger_mutex)
+def trim_fastq(input_files, output_files, basename1, basename2, qc_folder, output_folder ,logger, logger_mutex):
   if len(input_files) != 2:
     print "length of input file: " + str(len(input_files))    
     raise Exception("One of read pairs %s missing" % (input_files,))
-  #cmd = (" trim_galore --fastqc --paired {input_files[0]} {input_files[1]} "  )
-  #check_call(cmd.format(**locals()))
-  
-  #print input_files
-  #print output_files
   input1 = input_files[0]
   input2 = input_files[1]
-  cmd = "cd $TMPDIR ; cp " +  input1 + " . ; cp " + input2 + " . ; trim_galore --fastqc --paired " + basename1 + " "  +  basename2 + " ; mv *_val_*.fq.gz " + output_folder + " ; mv *fastqc* " +  qc_folder + " ; mv *report* " + qc_folder     + " ; rm * "
+  cmd = "cd $TMPDIR ; cp " +  input1 + " . ; cp " + input2 + " . ; trim_galore --fastqc --paired " + basename1 + " "  +  basename2 + " 2> " + qc_folder + "/trim_galore.log ; mv *_val_*.fq.gz " + output_folder + " ; mv *fastqc* " +  qc_folder + " ; mv *report* " + qc_folder     + " ; rm * "
   job_name = "trim_fastqc"
-     
+  #print output_files
+
   try:
-    stdout_res, stderr_ress = run_job(cmd,
+    
+    stdout_res, stderr_res = "",""
+    stdout_res, stderr_res = run_job(cmd,
                                       job_name,
                                       job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                       job_other_options    = "-S /bin/bash -V -l h_rt=01:00:00 -l mem=4G -l tmpfs=10G -wd /home/sejjctj/Scratch -j yes",
@@ -87,7 +92,7 @@ def trim_fastq(input_files, output_files, basename1, basename2, qc_folder, outpu
                                       working_directory    = "/home/sejjctj/Scratch",
                                       drmaa_session        = drmaa_session,
                                       logger = logger )                                      
-                                      
+   #                                   
   except error_drmaa_job as err:
     raise Exception("\n".join(map(str,
                       ["Failed to run:",
@@ -95,61 +100,99 @@ def trim_fastq(input_files, output_files, basename1, basename2, qc_folder, outpu
                         err,
                         stdout_res,
                         stderr_res])))
-                                    
+                                  
+  
   with logger_mutex:
     logger.debug("trim_fastq worked")
+
+  
 #_______________________________________________________________________________________________________
 # 
 #              take trimmer output and align with hisat2
 #_______________________________________________________________________________________________________
-reads_list = []
-@merge(trim_fastq,reads_list)
-def merge_trim_output(input_files,reads_list):
-  reads1 = []
-  reads2 = []
-  for item in input_files:
-    reads1.append(item[0])
-    reads2.append(item[1])
-  reads_list.append(reads1)
-  reads_list.append(reads2)
+  #print input_files
+  #reads1 = []
+  #reads2 = []
+  #for item in input_files:
+  #  reads1.append(item[0])
+  #  reads2.append(item[1])
+  #reads_list.append(reads1)
+  
+  #reads_list.append(reads2)
+  #print reads1
   # simply flattens the read lists to create two lists for hisat
 
 #"([^/]+)R[12]_001.fastq.gz$"
-@transform(merge_trim_output,
-           formatter("([^/]+)L001_R[12]_001_val_[12].fq.gz$"), "{path[0]}/{basename[0]}.bam", "{path[0]}","{path[0]}/qc")
-def hisat2(input_files, output_file, path, qc_folder):
-  first_reads_list = []
-  second_reads_list = []
-  def get_file_name_list(file_list):
-    temp_list = []
-    temp_file_list = []
-    for read_file in file_list:
-      temp_list.append(os.path.basename(read_file))
-    return temp_file_list
-# above are getting the file name only
-  first_reads_list = get_file_name_list(input_files[0])
-  second_reads_list = get_file_name_list(input_files[1])
-  # use get_file_name_list function to get list of filenames
-  first_reads = ','.join(first_reads_list)
-  second_reads = ','.join(second_reads_list)
-  hisat_output = output_file.split('/')
-  hisat_output = hisat_output[-1]
-  job_script_directory = "/home/sejjctj/Scratch/test_dir"
-  cmd = "cd $TMPDIR; mkdir reference; cp " + path + "/*val*fq.gz" + " . ; cp $HOME/Scratch/reference/grch38/* ./reference ; hisat2 -x ./reference/genome --known-splicesite-infile ./reference/grch38.splices.txt --dta-cufflinks -1 " + first_reads + " -2 " + second_reads + "  2> " + qc_folder  + "/" + hisat_output + ".log | samtools view -bS - -o " + hisat_output + " ; cp " + hisat_output + " " + path + " ; rm -r *"         
+hisat_input_list = {}
+hisat_input_list2 = []
+
+
+
+@collate(trim_fastq, formatter("^.+/(?P<FILENAME>.*)L00[123456]_R[12]_001_val_[12].fq.gz$"), "{subpath[0][1]}/bam/{FILENAME[0]}L001_R1_001_val_1.fq.sorted.bam", "{path[0]}","{subpath[0][1]}/bam","{subpath[0][1]}/qc")
+def hisat2(input_files, out_file, path, outpath,qc_folder):
+  print "hisat2 input_list: " + str(input_files)
+  flat_list = [item for sublist in input_files for item in sublist]
+  #print flat_list
+  print "hisat2 output file: " + out_file
+  print "qc folder: " + qc_folder
+  print "path to copy fastqs from:" + path
   
+  first_reads = []
+  second_reads =[]
+  for i in flat_list:
+    #print os.path.basename(i)
+    if re.search('val_1', os.path.basename(i)):
+      first_reads.append(os.path.basename(i))
+    elif re.search('val_2', os.path.basename(i)):
+      second_reads.append(os.path.basename(i))
+  first_reads = ','.join(first_reads)
+  second_reads = ','.join(second_reads)
+  print "first reads: " + first_reads
+#  reads_list = [item for sublist in input_files for item in sublist]
+#  for read in reads_list:
+#    print read
+#  print output_file
+#  first_reads_list = []
+#  second_reads_list = []
+#  def get_file_name_list(file_list):
+#    temp_list = [[],[]]
+#    for read_file in file_list:
+#      temp_list[0].append(os.path.basename(read_file[0]))
+#      temp_list[1].append(os.path.basename(read_file[1]))
+#    return temp_list
+## above for getting the file name only
+#  reads_list = get_file_name_list(input_files)
+#  first_reads_list = reads_list[0]
+#  second_reads_list = reads_list[1]
+#  # use get_file_name_list function to get list of filenames
+#  first_reads = ','.join(first_reads_list)
+#  second_reads = ','.join(second_reads_list)
+#  #print first_reads
+  hisat_output = out_file.split('/')
+  hisat_output = hisat_output[-1]
+#  #sort_output = hisat_output[:-4] + ".sorted.bam"
+#  job_script_directory = "/home/sejjctj/Scratch/test_dir"
+
+
+  cmd = "cd $TMPDIR; mkdir reference; cp " + path + "/*val*fq.gz" + " . ; cp $HOME/Scratch/reference/grch38_snp_tran/genome* ./reference ; hisat2 -p 4 -x ./reference/genome_snp_tran  --dta-cufflinks -1 " + first_reads + " -2 " + second_reads + "  2>" + qc_folder  + "/hisat.log | samtools view -bS - -o temp.bam ; samtools sort -@ 4 temp.bam  " + hisat_output[:-4] + " ; cp " + hisat_output + " " + outpath + " ; rm -r *"         
+  print cmd 
+  #print output_file
+  #print hisat_output 
   job_name = "hisat"
 
   try:
     stdout_res, stderr_res = run_job(cmd,
-                                      job_name,
-                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                      job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -l mem=4G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
+                                     job_name,
+                                     job_script_directory = "/home/sejjctj/Scratch/test_dir",
+                                      job_other_options    = "-S /bin/bash -V -l h_rt=07:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
                                       job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+  #                                    touch_only           = True,
+  #                                    run_locally          = True,
                                       retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                       working_directory    = "/home/sejjctj/Scratch",
                                       drmaa_session        = drmaa_session,
                                       logger = logger )
-
+#
   except error_drmaa_job as err:
     raise Exception("\n".join(map(str,
                       ["Failed to run:",
@@ -165,10 +208,8 @@ def hisat2(input_files, output_file, path, qc_folder):
 #              take trimmer output and run kallisto to get abundances
 #_______________________________________________________________________________________________________
 
-@transform(merge_trim_output,
-           formatter("([^/]+)L001_R[12]_001_val_[12].fq.gz$"), 
-           "{path[0]}/kallisto/abundance.tsv","{path[0]}", 
-           "{path[0]}/kallisto")
+
+@collate(trim_fastq,formatter("([^/]+)L00[1234]_R[12]_001_val_1.fq.gz$"),"{subpath[0][1]}/kallisto/abundance.tsv","{path[0]}","{subpath[0][1]}/kallisto")
 def kallisto(input_files, output_file, path, kallisto_folder):
   # flatten list
   list_of_reads = []
@@ -176,11 +217,12 @@ def kallisto(input_files, output_file, path, kallisto_folder):
   for filename in reads_list:
     list_of_reads.append(os.path.basename(filename))
   list_of_reads = ' '.join(list_of_reads)
-  
+  print "kallisto list of reads: " + list_of_reads 
   job_script_directory = "/home/sejjctj/Scratch/test_dir"
   
   cmd = "cd $TMPDIR; mkdir reference; cp " + path + "/*val*fq.gz" + " . ; cp $HOME/Scratch/reference/homo_transcripts.idx ./reference ; kallisto quant -b 100 -t 4 -i ./reference/homo_transcripts.idx " + list_of_reads + " -o " + kallisto_folder +  " ; rm -r * ;"         
-  print cmd
+  #print cmd
+  #print output_file
   job_name = "kallisto"
   
   try:
@@ -190,8 +232,8 @@ def kallisto(input_files, output_file, path, kallisto_folder):
                                       job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -l mem=4G -w n -pe smp 4 -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
                                       job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                       retain_job_scripts   = True,
-                                      #touch_only           = True,
-                                      #run_locally          = True,
+  #                                    touch_only           = True,
+  #                                    run_locally          = True,
                                       working_directory    = "/home/sejjctj/Scratch",
                                       drmaa_session        = drmaa_session,
                                       logger = logger )
@@ -203,64 +245,37 @@ def kallisto(input_files, output_file, path, kallisto_folder):
                         err,
                         stdout_res,
                         stderr_res])))
-
+  
   with logger_mutex:
     logger.debug("kallisto worked")
-#_______________________________________________________________________________________________________
-# 
-#              samtools sort hisat output
-#_______________________________________________________________________________________________________
-  
-@transform(hisat2,formatter("([^/]+)L001_R1_001_val_1.fq.bam$"), "{path[0]}/{basename[0]}.sorted.bam", "{basename[0]}", "{path[0]}")
-def sort(input_file, output_file, prefix, path):
-  filename = os.path.basename(input_file)
-  print filename
-  print output_file
-  job_script_directory = "/home/sejjctj/Scratch/test_dir"
-  
-  cmd = "cd $TMPDIR; cp " + input_file + " . ; samtools sort " + filename + " " + prefix + ".sorted ; cp " + prefix + ".sorted.bam " + path + " ; rm -r * "         
 
-  job_name = "sort"
-   
-  try:
-    stdout_res, stderr_res = run_job(cmd,
-                                      job_name,
-                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                      job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -l mem=4G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
-                                      job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
-                                      retain_job_scripts   = True,
-                                      working_directory    = "/home/sejjctj/Scratch",
-                                      drmaa_session        = drmaa_session,
-                                      logger = logger )
 
-  except error_drmaa_job as err:
-    raise Exception("\n".join(map(str,
-                      ["Failed to run:",
-                        cmd,
-                        err,
-                        stdout_res,
-                        stderr_res])))
-
-  with logger_mutex:
-    logger.debug("sort worked")
 #_______________________________________________________________________________________________________
 # 
 #              cufflinks generate gtf files from sorted hisat output
 #_______________________________________________________________________________________________________
 
-@transform(sort,formatter("([^/]+)L001_R1_001_val_1.fq.sorted.bam$"), "{path[0]}/cufflinks/transcripts.gtf", "{path[0]}","{path[0]}/qc")
-def cufflinks(input_file, output_file, path, qc_path):
-  filename = os.path.basename(input_file)
-  job_script_directory = "/home/sejjctj/Scratch/test_dir"
-  cmd = "cd $TMPDIR; mkdir reference; cp " + input_file + " . ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38* ./reference  ; cufflinks -p 4 -g ./reference/Homo_sapiens.GRCh38.76.gtf -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa " + filename + " -o " + path + "/cufflinks/ 2> " + qc_path + "/cufflinks.log ; rm -r * ;"
-  job_name = "cufflinks"
 
+@transform(hisat2,formatter("^.+/(?P<FILENAME>.*)bam$"), "{subpath[0][1]}/cufflinks/transcripts.gtf","{subpath[0][1]}/cufflinks","{subpath[0][1]}/qc")
+def cufflinks(input_file, output_file,  path, qc_path):
+  
+  print "cufflinks input: " + input_file
+  print "cufflinks output: " + output_files
+  
+  job_script_directory = "/home/sejjctj/Scratch/test_dir"
+  cmd = "cd $TMPDIR; mkdir reference; cp " + input_file + " . ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.85.gtf ./reference ; cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference ; cufflinks -p 4 -g ./reference/Homo_sapiens.GRCh38.85.gtf -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa --mask-file ./reference/ribosomal_mito_mask.gtf " + input_file + " -o " + path + " 2>" + qc_path + "/cufflinks.log ; rm -r * ;"
+  job_name = "cufflinks"
+  print cmd
+  
   try:
+    stdout_res, stderr_res = "",""
     stdout_res, stderr_res = run_job(cmd,
                                       job_name,
                                       job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                       job_other_options    = "-S /bin/bash -V -l h_rt=07:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
                                       job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+   #                                  touch_only           = True,
+   #                                  run_locally          = True,
                                       retain_job_scripts   = True,
                                       working_directory    = "/home/sejjctj/Scratch",
                                       drmaa_session        = drmaa_session,
@@ -273,7 +288,7 @@ def cufflinks(input_file, output_file, path, qc_path):
                         err,
                         stdout_res,
                         stderr_res])))
-
+  
   with logger_mutex:
     logger.debug("cufflinks worked")
 
@@ -282,47 +297,110 @@ def cufflinks(input_file, output_file, path, qc_path):
 #              cuffmerge, create assembly text for cuffmerge
 #_______________________________________________________________________________________________________
 
+@merge(cufflinks, basedir + "assembly_list.txt" )
+def create_cuffmerge_input(input_files, output):
+  #print "input files :" + str(input_files)
+  #print output
+  with open(output,'w') as f:
+    for item in input_files:
+      f.write("%s\n" % item)
 
-# I can't think of any other way than  manually entering the cuffmerge assembly text file
-# convoluted way of checking if the assembly.txt file is available and providing it to cuffmerge
-@files( cuffmerge_dir + "assembly_list.txt", cuffmerge_dir + "assembly_list.txt")
-def assembly_check(input_file, output):
-  print input_file
-  pass
-  #with open(input_file, 'rw') as f:
-  #    pass
 
-@transform(assembly_check, formatter(".txt$"), "{path[0]}/merged.gtf", "{path[0]}")
-def cuffmerge(input_file, output, outpath):
-  
-  cmd = "cd $TMPDIR; cp " + input_file + " . ; make_dirs.py 2> " + outpath + "/cuffmerge.log ; ls */*/*gtf > assembly.txt ; mkdir references ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa* .references ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.76.gtf ./references; cuffmerge -p 4  -g ./references/Homo_sapiens.GRCh38.76.gtf -s ./references/Homo_sapiens.GRCh38.dna_mt.primary_assembly.fa assembly.txt -o " + outpath + " 2>>  " + outpath + "/cuffmerge.log ; rm -r * ;" 
-  print cmd
-  print outpath
+
+@transform(create_cuffmerge_input, formatter("([^/]+).$"), "{path[0]}/cuffmerge_out/merged.gtf", "{path[0]}/cuffmerge_out/")
+def cuffmerge(input_file, output_file, output_path):
+  print "cuffmerge input: " + input_file
+  print "cuffmerge output: " + output_file
+
+  cmd = "cd $TMPDIR; cp " + input_file + " . ; mkdir ./reference; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.85.gtf ./reference; cuffmerge -p 4  -g ./reference/Homo_sapiens.GRCh38.85.gtf -s ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa " + input_file + "  2>>" + output_path + "/cuffmerge.log ; mv ./merged_asm/* " + output_path + "; rm -r * ;" 
+  print cmdi
   job_name = "cuffmerge"
   try:
+    stdout_res, stderr_res = "",""
     stdout_res, stderr_res = run_job(cmd,
-                                      job_name,
-                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                      job_other_options    = "-S /bin/bash -V -l h_rt=07:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
-                                      job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
-                                      retain_job_scripts   = True,
-                                      working_directory    = "/home/sejjctj/Scratch",
-                                      drmaa_session        = drmaa_session,
-                                      logger = logger )
+                                     job_name,
+                                     job_script_directory = "/home/sejjctj/Scratch/test_dir",
+                                     job_other_options    = "-S /bin/bash -V -l h_rt=07:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
+                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+     #                                touch_only           = True,
+     #                                run_locally          = True,
+                                     retain_job_scripts   = True,
+                                     working_directory    = "/home/sejjctj/Scratch",
+                                     drmaa_session        = drmaa_session,
+                                     logger = logger )
   
   except error_drmaa_job as err:
     raise Exception("\n".join(map(str,
-                      ["Failed to run:",
-                        cmd,
-                        err,
-                        stdout_res,
-                        stderr_res])))
+                     ["Failed to run:",
+                      cmd, 
+                      err,
+                      stdout_res,
+                      stderr_res])))
 
   with logger_mutex:
     logger.debug("cuffmerge worked")
 
 
+#______________________________________________________________
+#
+#   creating pairs for comparison with cuffdiff
+#______________________________________________________________
+
+
+import glob
+@follows(cuffmerge)
+@transform(basedir + "cuffdiff_samples.txt", formatter("([^/]+)"), "{path[0]}/cuffdiff/test1/genes.fpkm_tracking", "{path[0]}/cuffdiff/")
+def prepare_cuffdiff(input_files, output_file, output_path):
+  
+  with open(input_files, 'r') as f:
+    for line in f:
+      line = line.rstrip()
+      line = line.split(',')
+      #print line
+      path = output_path + line[0]
+      #print path
+      try:
+        os.mkdir( path , 0755)
+      except OSError, e:
+        if e.errno == 17:
+          pass
+      test1 = glob.glob(basedir + line[1] + "/replicate*/bam/*")
+      test2 = glob.glob(basedir + line[2] + "/replicate*/bam/*")
+      test1 = ','.join(test1)
+      test2 = ','.join(test2)
+      
+      cmd = "cd $TMPDIR; mkdir reference; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference; cuffdiff  -p 4 -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa " + basedir + "cuffmerge_out/merged.gtf -o " + path + " " + test1 + " " + test2 + " 2>>" + basedir + "/cuffdiff.log ; rm -r * ;"
+      print cmd
+
+  job_name = "cuffdiff"
+  try:
+    stdout_res, stderr_res = "",""
+    stdout_res, stderr_res = run_job(cmd,
+                                     job_name,
+                                     job_script_directory = "/home/sejjctj/Scratch/test_dir",
+                                     job_other_options    = "-S /bin/bash -V -l h_rt=12:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
+                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+     #                                touch_only           = True,
+     #                                run_locally          = True,
+                                     retain_job_scripts   = True,
+                                     working_directory    = "/home/sejjctj/Scratch",
+                                     drmaa_session        = drmaa_session,
+                                     logger = logger )
+  
+  except error_drmaa_job as err:
+    raise Exception("\n".join(map(str,
+                     ["Failed to run:",
+                      cmd, 
+                      err,
+                      stdout_res,
+                      stderr_res])))
+
+  with logger_mutex:
+    logger.debug("cuffdiff worked")
+
+
+#______________________________________________________________
 
 if __name__ == '__main__':
-  cmdline.run (options)
+  cmdline.run (options, multithread = options.jobs)
   drmaa_session.exit()
