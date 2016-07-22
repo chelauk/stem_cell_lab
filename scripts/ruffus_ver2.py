@@ -6,18 +6,86 @@ from ruffus import *
 import ruffus.cmdline as cmdline
 from subprocess import check_call
 parser = cmdline.get_argparse(description="Chela's Pipeline")
+#____________________________________________________________________________________________________
+#  
+#    Initially create sample dirs (eg REH3_scr/replicate_?/fastq_raw
+#
+#REH3_scr/
+#├── replicate_1
+#│   ├── bam
+#│   │   └── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1.fq.sorted.bam
+#│   ├── cufflinks
+#│   │   ├── genes.fpkm_tracking
+#│   │   ├── isoforms.fpkm_tracking
+#│   │   └── skipped.gtf
+#│   ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1.fq.bam
+#│   ├── fastq_raw
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001.fastq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L001_R2_001.fastq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L002_R1_001.fastq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L002_R2_001.fastq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L003_R1_001.fastq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L003_R2_001.fastq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L004_R1_001.fastq.gz
+#│   │   └── ED4-I1-Reh3-scr-1_S1_L004_R2_001.fastq.gz
+#│   ├── fastq_trimmed
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1.fq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L001_R2_001_val_2.fq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L002_R1_001_val_1.fq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L002_R2_001_val_2.fq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L003_R1_001_val_1.fq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L003_R2_001_val_2.fq.gz
+#│   │   ├── ED4-I1-Reh3-scr-1_S1_L004_R1_001_val_1.fq.gz
+#│   │   └── ED4-I1-Reh3-scr-1_S1_L004_R2_001_val_2.fq.gz
+#│   ├── gtf
+#│   │   └── transcripts.gtf
+#│   ├── kallisto
+#│   │   ├── abundance.h5
+#│   │   ├── abundance.tsv
+#│   │   └── run_info.json
+#│   └── qc
+#│       ├── cufflinks.log
+#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001.fastq.gz_trimming_report.txt
+#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1_fastqc.html
+#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1_fastqc.zip
+#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1.fq.bam.log
+#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R2_001.fastq.gz_trimming_report.txt
+#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R2_001_val_2_fastqc.html
+#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R2_001_val_2_fastqc.zip
+#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R1_001.fastq.gz_trimming_report.txt
+#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R1_001_val_1_fastqc.html
+#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R1_001_val_1_fastqc.zip
+#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R2_001.fastq.gz_trimming_report.txt
+#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R2_001_val_2_fastqc.html
+#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R2_001_val_2_fastqc.zip
+#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R1_001.fastq.gz_trimming_report.txt
+#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R1_001_val_1_fastqc.html
+#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R1_001_val_1_fastqc.zip
+#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R2_001.fastq.gz_trimming_report.txt
+#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R2_001_val_2_fastqc.html
+#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R2_001_val_2_fastqc.zip
+#│       ├── ED4-I1-Reh3-scr-1_S1_L004_R1_001.fastq.gz_trimming_report.txt
+#│       ├── ED4-I1-Reh3-scr-1_S1_L004_R1_001_val_1_fastqc.html
+#│       ├── ED4-I1-Reh3-scr-1_S1_L004_R1_001_val_1_fastqc.zip
+#│       ├── ED4-I1-Reh3-scr-1_S1_L004_R2_001.fastq.gz_trimming_report.txt
+#│       ├── ED4-I1-Reh3-scr-1_S1_L004_R2_001_val_2_fastqc.html
+#│       └── ED4-I1-Reh3-scr-1_S1_L004_R2_001_val_2_fastqc.zip
+#├── replicate_2
+#│   ├── bam
+#│   │   └── ED4-I5-Reh3-scr-2_S5_L001_R1_001_val_1.fq.sorted.bam
+#│   ├── fastq_raw
+#│   ├── fastq_trimmed
+#│   └── gtf
+#│       └── transcripts.gtf
+#└── replicate_3
+#    ├── bam
+#    │   └── ED4-I9-Reh3-scr-3_S9_L001_R1_001_val_1.fq.sorted.bam
+#    ├── fastq_raw
+#    ├── fastq_trimmed
+#    └── gtf
+#        └── transcripts.gtf
+#
 
-#                                                                                 .
-#   Very flexible handling of input files                                         .
-#                                                                                 .
-#      input files can be specified flexibly as:                                  .
-#                 --input a.fastq b.fastq                                         .
-#                 --input a.fastq --input b.fastq                                 .
-#                 --input *.fastq --input other/*.fastq                           .
-#                 --input "*.fastq"                                               .
-#                                                                                 .
-#       The last form is expanded in the script and avoids limitations on command .
-#           line lengths                                                          .
 #                                                                                 .
 parser.add_argument('-i', '--input', nargs='+', metavar="FILE", action="append", help = "Fastq files")
 #
