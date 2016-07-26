@@ -6,86 +6,18 @@ from ruffus import *
 import ruffus.cmdline as cmdline
 from subprocess import check_call
 parser = cmdline.get_argparse(description="Chela's Pipeline")
-#____________________________________________________________________________________________________
-#  
-#    Initially create sample dirs (eg REH3_scr/replicate_?/fastq_raw
-#
-#REH3_scr/
-#├── replicate_1
-#│   ├── bam
-#│   │   └── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1.fq.sorted.bam
-#│   ├── cufflinks
-#│   │   ├── genes.fpkm_tracking
-#│   │   ├── isoforms.fpkm_tracking
-#│   │   └── skipped.gtf
-#│   ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1.fq.bam
-#│   ├── fastq_raw
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001.fastq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L001_R2_001.fastq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L002_R1_001.fastq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L002_R2_001.fastq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L003_R1_001.fastq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L003_R2_001.fastq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L004_R1_001.fastq.gz
-#│   │   └── ED4-I1-Reh3-scr-1_S1_L004_R2_001.fastq.gz
-#│   ├── fastq_trimmed
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1.fq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L001_R2_001_val_2.fq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L002_R1_001_val_1.fq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L002_R2_001_val_2.fq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L003_R1_001_val_1.fq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L003_R2_001_val_2.fq.gz
-#│   │   ├── ED4-I1-Reh3-scr-1_S1_L004_R1_001_val_1.fq.gz
-#│   │   └── ED4-I1-Reh3-scr-1_S1_L004_R2_001_val_2.fq.gz
-#│   ├── gtf
-#│   │   └── transcripts.gtf
-#│   ├── kallisto
-#│   │   ├── abundance.h5
-#│   │   ├── abundance.tsv
-#│   │   └── run_info.json
-#│   └── qc
-#│       ├── cufflinks.log
-#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001.fastq.gz_trimming_report.txt
-#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1_fastqc.html
-#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1_fastqc.zip
-#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R1_001_val_1.fq.bam.log
-#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R2_001.fastq.gz_trimming_report.txt
-#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R2_001_val_2_fastqc.html
-#│       ├── ED4-I1-Reh3-scr-1_S1_L001_R2_001_val_2_fastqc.zip
-#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R1_001.fastq.gz_trimming_report.txt
-#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R1_001_val_1_fastqc.html
-#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R1_001_val_1_fastqc.zip
-#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R2_001.fastq.gz_trimming_report.txt
-#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R2_001_val_2_fastqc.html
-#│       ├── ED4-I1-Reh3-scr-1_S1_L002_R2_001_val_2_fastqc.zip
-#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R1_001.fastq.gz_trimming_report.txt
-#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R1_001_val_1_fastqc.html
-#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R1_001_val_1_fastqc.zip
-#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R2_001.fastq.gz_trimming_report.txt
-#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R2_001_val_2_fastqc.html
-#│       ├── ED4-I1-Reh3-scr-1_S1_L003_R2_001_val_2_fastqc.zip
-#│       ├── ED4-I1-Reh3-scr-1_S1_L004_R1_001.fastq.gz_trimming_report.txt
-#│       ├── ED4-I1-Reh3-scr-1_S1_L004_R1_001_val_1_fastqc.html
-#│       ├── ED4-I1-Reh3-scr-1_S1_L004_R1_001_val_1_fastqc.zip
-#│       ├── ED4-I1-Reh3-scr-1_S1_L004_R2_001.fastq.gz_trimming_report.txt
-#│       ├── ED4-I1-Reh3-scr-1_S1_L004_R2_001_val_2_fastqc.html
-#│       └── ED4-I1-Reh3-scr-1_S1_L004_R2_001_val_2_fastqc.zip
-#├── replicate_2
-#│   ├── bam
-#│   │   └── ED4-I5-Reh3-scr-2_S5_L001_R1_001_val_1.fq.sorted.bam
-#│   ├── fastq_raw
-#│   ├── fastq_trimmed
-#│   └── gtf
-#│       └── transcripts.gtf
-#└── replicate_3
-#    ├── bam
-#    │   └── ED4-I9-Reh3-scr-3_S9_L001_R1_001_val_1.fq.sorted.bam
-#    ├── fastq_raw
-#    ├── fastq_trimmed
-#    └── gtf
-#        └── transcripts.gtf
-#
 
+#                                                                                 .
+#   Very flexible handling of input files                                         .
+#                                                                                 .
+#      input files can be specified flexibly as:                                  .
+#                 --input a.fastq b.fastq                                         .
+#                 --input a.fastq --input b.fastq                                 .
+#                 --input *.fastq --input other/*.fastq                           .
+#                 --input "*.fastq"                                               .
+#                                                                                 .
+#       The last form is expanded in the script and avoids limitations on command .
+#           line lengths                                                          .
 #                                                                                 .
 parser.add_argument('-i', '--input', nargs='+', metavar="FILE", action="append", help = "Fastq files")
 #
@@ -131,7 +63,8 @@ drmaa_session.initialize()
         "{subpath[0][1]}/bam",
         "{subpath[0][1]}/kallisto",
         "{subpath[0][1]}/cufflinks",
-        "{subpath[0][3]}/cuffmerge_out"])
+        "{subpath[0][3]}/cuffmerge_out",
+        "{subpath[0][1]}/cuffquant"])
 @collate(original_data_files,
         formatter("([^/]+)R[12]_001.fastq.gz$"),
               ["{subpath[0][1]}/fastq_trimmed/{1[0]}R1_001_val_1.fq.gz",  # paired file 1
@@ -140,14 +73,14 @@ drmaa_session.initialize()
              "{subpath[0][1]}/fastq_trimmed", logger, logger_mutex)
 def trim_fastq(input_files, output_files, basename1, basename2, qc_folder, output_folder ,logger, logger_mutex):
   if len(input_files) != 2:
-    print "length of input file: " + str(len(input_files))    
+    #print "length of input file: " + str(len(input_files))    
     raise Exception("One of read pairs %s missing" % (input_files,))
   input1 = input_files[0]
   input2 = input_files[1]
   cmd = "cd $TMPDIR ; cp " +  input1 + " . ; cp " + input2 + " . ; trim_galore --fastqc --paired " + basename1 + " "  +  basename2 + " 2> " + qc_folder + "/trim_galore.log ; mv *_val_*.fq.gz " + output_folder + " ; mv *fastqc* " +  qc_folder + " ; mv *report* " + qc_folder     + " ; rm * "
   job_name = "trim_fastqc"
   #print output_files
-
+  
   try:
     
     stdout_res, stderr_res = "",""
@@ -169,7 +102,7 @@ def trim_fastq(input_files, output_files, basename1, basename2, qc_folder, outpu
                         stdout_res,
                         stderr_res])))
                                   
-  
+    
   with logger_mutex:
     logger.debug("trim_fastq worked")
 
@@ -198,12 +131,13 @@ hisat_input_list2 = []
 
 @collate(trim_fastq, formatter("^.+/(?P<FILENAME>.*)L00[123456]_R[12]_001_val_[12].fq.gz$"), "{subpath[0][1]}/bam/{FILENAME[0]}L001_R1_001_val_1.fq.sorted.bam", "{path[0]}","{subpath[0][1]}/bam","{subpath[0][1]}/qc")
 def hisat2(input_files, out_file, path, outpath,qc_folder):
-  print "hisat2 input_list: " + str(input_files)
+  #print out_file
+  #print "hisat2 input_list: " + str(input_files)
   flat_list = [item for sublist in input_files for item in sublist]
   #print flat_list
-  print "hisat2 output file: " + out_file
-  print "qc folder: " + qc_folder
-  print "path to copy fastqs from:" + path
+  #print "hisat2 output file: " + out_file
+  #print "qc folder: " + qc_folder
+  #print "path to copy fastqs from:" + path
   
   first_reads = []
   second_reads =[]
@@ -215,7 +149,7 @@ def hisat2(input_files, out_file, path, outpath,qc_folder):
       second_reads.append(os.path.basename(i))
   first_reads = ','.join(first_reads)
   second_reads = ','.join(second_reads)
-  print "first reads: " + first_reads
+  #print "first reads: " + first_reads
 #  reads_list = [item for sublist in input_files for item in sublist]
 #  for read in reads_list:
 #    print read
@@ -243,11 +177,11 @@ def hisat2(input_files, out_file, path, outpath,qc_folder):
 
 
   cmd = "cd $TMPDIR; mkdir reference; cp " + path + "/*val*fq.gz" + " . ; cp $HOME/Scratch/reference/grch38_snp_tran/genome* ./reference ; hisat2 -p 4 -x ./reference/genome_snp_tran  --dta-cufflinks -1 " + first_reads + " -2 " + second_reads + "  2>" + qc_folder  + "/hisat.log | samtools view -bS - -o temp.bam ; samtools sort -@ 4 temp.bam  " + hisat_output[:-4] + " ; cp " + hisat_output + " " + outpath + " ; rm -r *"         
-  print cmd 
+  #print cmd 
   #print output_file
   #print hisat_output 
   job_name = "hisat"
-
+  
   try:
     stdout_res, stderr_res = run_job(cmd,
                                      job_name,
@@ -268,7 +202,7 @@ def hisat2(input_files, out_file, path, outpath,qc_folder):
                         err,
                         stdout_res,
                         stderr_res])))
-
+  
   with logger_mutex:
     logger.debug("hisat worked")
 #_______________________________________________________________________________________________________
@@ -285,14 +219,14 @@ def kallisto(input_files, output_file, path, kallisto_folder):
   for filename in reads_list:
     list_of_reads.append(os.path.basename(filename))
   list_of_reads = ' '.join(list_of_reads)
-  print "kallisto list of reads: " + list_of_reads 
+  #print "kallisto list of reads: " + list_of_reads 
   job_script_directory = "/home/sejjctj/Scratch/test_dir"
   
   cmd = "cd $TMPDIR; mkdir reference; cp " + path + "/*val*fq.gz" + " . ; cp $HOME/Scratch/reference/homo_transcripts.idx ./reference ; kallisto quant -b 100 -t 4 -i ./reference/homo_transcripts.idx " + list_of_reads + " -o " + kallisto_folder +  " ; rm -r * ;"         
   #print cmd
   #print output_file
   job_name = "kallisto"
-  
+    
   try:
     stdout_res, stderr_res = run_job(cmd,
                                       job_name,
@@ -313,7 +247,7 @@ def kallisto(input_files, output_file, path, kallisto_folder):
                         err,
                         stdout_res,
                         stderr_res])))
-  
+   
   with logger_mutex:
     logger.debug("kallisto worked")
 
@@ -327,14 +261,14 @@ def kallisto(input_files, output_file, path, kallisto_folder):
 @transform(hisat2,formatter("^.+/(?P<FILENAME>.*)bam$"), "{subpath[0][1]}/cufflinks/transcripts.gtf","{subpath[0][1]}/cufflinks","{subpath[0][1]}/qc")
 def cufflinks(input_file, output_file,  path, qc_path):
   
-  print "cufflinks input: " + input_file
-  print "cufflinks output: " + output_files
+  #print "cufflinks input: " + input_file
+  #print "cufflinks output: " + output_file
   
   job_script_directory = "/home/sejjctj/Scratch/test_dir"
-  cmd = "cd $TMPDIR; mkdir reference; cp " + input_file + " . ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.85.gtf ./reference ; cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference ; cufflinks -p 4 -g ./reference/Homo_sapiens.GRCh38.85.gtf -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa --mask-file ./reference/ribosomal_mito_mask.gtf " + input_file + " -o " + path + " 2>" + qc_path + "/cufflinks.log ; rm -r * ;"
+  cmd = "cd $TMPDIR; mkdir reference; cp " + input_file + " . ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.76.gtf ./reference ; cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference ; cufflinks -p 4 -g ./reference/Homo_sapiens.GRCh38.76.gtf -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa --mask-file ./reference/ribosomal_mito_mask.gtf " + input_file + " -o " + path + " 2>" + qc_path + "/cufflinks.log ; rm -r * ;"
   job_name = "cufflinks"
-  print cmd
-  
+  #print cmd
+    
   try:
     stdout_res, stderr_res = "",""
     stdout_res, stderr_res = run_job(cmd,
@@ -356,9 +290,48 @@ def cufflinks(input_file, output_file,  path, qc_path):
                         err,
                         stdout_res,
                         stderr_res])))
-  
+    
   with logger_mutex:
     logger.debug("cufflinks worked")
+
+cuffquant_list = []
+
+import glob
+@collate(hisat2,formatter("([^/]+)fq.sorted.bam$"), "{subpath[0][1]}/cuffquant/abundances.cxb", "{subpath[0][1]}/cuffquant")
+def cuffquant(input_file, output_file, out_path):
+  #cuffquant_list = glob.glob(outfile + "/replicate*/bam/*")
+  #cuffquant_list = ','.join(cuffquant_list)
+  input_file = input_file[0]
+  print input_file
+  job_script_directory = "/home/sejjctj/Scratch/test_dir"
+  cmd = "cd $TMPDIR; mkdir reference; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.76.gtf ./reference ; cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference ; cuffquant -p 4 --multi-read-correct -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa --mask-file ./reference/ribosomal_mito_mask.gtf ./reference/Homo_sapiens.GRCh38.76.gtf " + input_file + " -o " + out_path + "  2>" + out_path + "/cuffquant.log ; rm -r * ;"
+  job_name = "cuffquant"
+  print cmd
+   
+  try:
+    stdout_res, stderr_res = "",""
+    stdout_res, stderr_res = run_job(cmd,
+                                      job_name,
+                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
+                                      job_other_options    = "-S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
+                                      job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+   #                                  touch_only           = True,
+   #                                  run_locally          = True,
+                                      retain_job_scripts   = True,
+                                      working_directory    = "/home/sejjctj/Scratch",
+                                      drmaa_session        = drmaa_session,
+                                      logger = logger )
+
+  except error_drmaa_job as err:
+    raise Exception("\n".join(map(str,
+                      ["Failed to run:",
+                        cmd,
+                        err,
+                        stdout_res,
+                        stderr_res])))
+    
+  with logger_mutex:
+    logger.debug("cuffquant worked")
 
 #_______________________________________________________________________________________________________
 # 
@@ -377,18 +350,18 @@ def create_cuffmerge_input(input_files, output):
 
 @transform(create_cuffmerge_input, formatter("([^/]+).$"), "{path[0]}/cuffmerge_out/merged.gtf", "{path[0]}/cuffmerge_out/")
 def cuffmerge(input_file, output_file, output_path):
-  print "cuffmerge input: " + input_file
-  print "cuffmerge output: " + output_file
+  #print "cuffmerge input: " + input_file
+  #print "cuffmerge output: " + output_file
 
-  cmd = "cd $TMPDIR; cp " + input_file + " . ; mkdir ./reference; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.85.gtf ./reference; cuffmerge -p 4  -g ./reference/Homo_sapiens.GRCh38.85.gtf -s ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa " + input_file + "  2>>" + output_path + "/cuffmerge.log ; mv ./merged_asm/* " + output_path + "; rm -r * ;" 
-  print cmdi
+  cmd = "cd $TMPDIR; cp " + input_file + " . ; mkdir ./reference; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference ; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.76.gtf ./reference; cuffmerge -p 4  -g ./reference/Homo_sapiens.GRCh38.76.gtf -s ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa " + input_file + "  2>>" + output_path + "cuffmerge.log ; mv ./merged_asm/* " + output_path + "; rm -r * ;" 
   job_name = "cuffmerge"
+  
   try:
     stdout_res, stderr_res = "",""
     stdout_res, stderr_res = run_job(cmd,
                                      job_name,
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                     job_other_options    = "-S /bin/bash -V -l h_rt=07:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
+                                     job_other_options    = "-S /bin/bash -V -l h_rt=10:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
                                      job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
      #                                touch_only           = True,
      #                                run_locally          = True,
@@ -404,7 +377,7 @@ def cuffmerge(input_file, output_file, output_path):
                       err,
                       stdout_res,
                       stderr_res])))
-
+  
   with logger_mutex:
     logger.debug("cuffmerge worked")
 
@@ -414,11 +387,10 @@ def cuffmerge(input_file, output_file, output_path):
 #   creating pairs for comparison with cuffdiff
 #______________________________________________________________
 
-
-import glob
 @follows(cuffmerge)
-@transform(basedir + "cuffdiff_samples.txt", formatter("([^/]+)"), "{path[0]}/cuffdiff/test1/genes.fpkm_tracking", "{path[0]}/cuffdiff/")
-def prepare_cuffdiff(input_files, output_file, output_path):
+@follows(cuffquant)
+@transform(basedir + "cuffdiff_samples.txt", formatter("([^/]+)"), "{path[0]}/cuffdiff/cuffdiff.done", "{path[0]}/cuffdiff/")
+def cuffdiff(input_files, output_file, output_path):
   
   with open(input_files, 'r') as f:
     for line in f:
@@ -432,18 +404,19 @@ def prepare_cuffdiff(input_files, output_file, output_path):
       except OSError, e:
         if e.errno == 17:
           pass
-      test1 = glob.glob(basedir + line[1] + "/replicate*/bam/*")
-      test2 = glob.glob(basedir + line[2] + "/replicate*/bam/*")
+      test1 = glob.glob(basedir + line[1] + "/replicate*/cuffquant/*cxb")
+      test2 = glob.glob(basedir + line[2] + "/replicate*/cuffquant/*cxb")
       test1 = ','.join(test1)
       test2 = ','.join(test2)
-      
-      cmd = "cd $TMPDIR; mkdir reference; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference; cuffdiff  -p 4 -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa " + basedir + "cuffmerge_out/merged.gtf -o " + path + " " + test1 + " " + test2 + " 2>>" + basedir + "/cuffdiff.log ; rm -r * ;"
+      print test1
+      print test2
+      cmd = "cd $TMPDIR; mkdir reference; cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference; cuffdiff  -p 4 -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa -L "+line[1]+","+ line[2] + " " + basedir + "cuffmerge_out/merged.gtf -o " + path + " " + test1 + " " + test2 + " 2>>" + basedir + "cuffdiff.log ; rm -r * ;"
       print cmd
-
-  job_name = "cuffdiff"
-  try:
-    stdout_res, stderr_res = "",""
-    stdout_res, stderr_res = run_job(cmd,
+  
+      job_name = "cuffdiff"
+      try:
+        stdout_res, stderr_res = "",""
+        stdout_res, stderr_res = run_job(cmd,
                                      job_name,
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                      job_other_options    = "-S /bin/bash -V -l h_rt=12:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
@@ -455,18 +428,20 @@ def prepare_cuffdiff(input_files, output_file, output_path):
                                      drmaa_session        = drmaa_session,
                                      logger = logger )
   
-  except error_drmaa_job as err:
-    raise Exception("\n".join(map(str,
+      except error_drmaa_job as err:
+       raise Exception("\n".join(map(str,
                      ["Failed to run:",
                       cmd, 
                       err,
                       stdout_res,
                       stderr_res])))
-
-  with logger_mutex:
-    logger.debug("cuffdiff worked")
-
-
+  
+    with logger_mutex:
+      logger.debug("cuffdiff worked")
+  
+  with open(output_path + "cuffdiff.done", 'w') as f:
+    f.write("cuffdiff.done")
+  
 #______________________________________________________________
 
 if __name__ == '__main__':
