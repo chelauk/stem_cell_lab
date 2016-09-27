@@ -132,7 +132,7 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
 #_______________________________________________________________________________________________________
 
 
-@collate(trim_fastq, formatter("([^/]+)L00[1234]_R[12]_001_val_[12].fq.gz$"), 
+@collate(trim_fastq, formatter("([^/]+)R[12]_001_val_[12].fq.gz$"), 
                               "{subpath[0][1]}/bam/{1[0]}R1_001_val_1.fq.sorted.bam", 
                               "{path[0]}","{subpath[0][1]}/bam",
                               "{subpath[0][1]}/qc")
@@ -193,7 +193,7 @@ def hisat2(input_files, out_file, path, outpath,qc_folder):
 #_______________________________________________________________________________________________________
 
 
-@collate(trim_fastq,formatter("([^/]+)L00[1234]_R[12]_001_val_[12].fq.gz$"),"{subpath[0][1]}/kallisto/abundance.tsv","{path[0]}","{subpath[0][1]}/kallisto")
+@collate(trim_fastq,formatter("([^/]+)R[12]_001_val_[12].fq.gz$"),"{subpath[0][1]}/kallisto/abundance.tsv","{path[0]}","{subpath[0][1]}/kallisto")
 def kallisto(input_files, output_file, path, kallisto_folder):
   list_of_reads = []
   reads_list = [item for sublist in input_files for item in sublist]
