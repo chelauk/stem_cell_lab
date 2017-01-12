@@ -42,6 +42,7 @@ def get_data_files(x):
     return input_files
  
 original_data_files=get_data_files(options.input)
+print original_data_files
 original_data_files = [item for sublist in original_data_files for item in sublist]
 
 if not original_data_files:
@@ -132,7 +133,7 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
 #_______________________________________________________________________________________________________
 
 
-@collate(trim_fastq, formatter("([^/]+)R[12]_001_val_[12].fq.gz$"), 
+@collate(trim_fastq, formatter("([^/]+)_L00[1234]_R[12]_001_val_[12].fq.gz$"), 
                               "{subpath[0][1]}/bam/{1[0]}R1_001_val_1.fq.sorted.bam", 
                               "{path[0]}","{subpath[0][1]}/bam",
                               "{subpath[0][1]}/qc")
@@ -164,7 +165,7 @@ def hisat2(input_files, out_file, path, outpath,qc_folder):
           " rm -r * ; ")
   
   cmd = cmd.format(**locals())         
-
+  print cmd
   try:
     stdout_res, stderr_res = "",""
     stdout_res, stderr_res = run_job(cmd,
