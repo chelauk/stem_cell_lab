@@ -1,4 +1,15 @@
 #!/usr/bin/env python
+
+#######################################################################################
+# An RNA seq pipeline developed by Chela James using the ruffus package               #
+# http://www.ruffus.org.uk/                                                           #
+# current version:                                                                    #
+# * trim galore --hisat-----bam---QORTS (qc and DESEQ2 counts)                        # 
+#                 |-STAR----|    |-cufflinks-fpkms-cuffdiff                           #
+#                 |-kallisto-tsv(for sleuth)                                          #
+# notes:                                                                              #                                                                    
+# currently cuffdiff using the -G option for known transcripts from gtf file          #
+#######################################################################################
 from glob import glob
 import glob
 import sys, os, fnmatch
@@ -6,12 +17,13 @@ import re
 from ruffus import *
 import ruffus.cmdline as cmdline
 from subprocess import check_call
-parser = cmdline.get_argparse(description="Chela's Pipeline")
+
+parser = cmdline.get_argparse(description="Standard RNAseq Pipeline")
 
 #parser.add_argument('-i', '--input', nargs='+', metavar="FILE", action="append", help = "Fastq files")
 parser.add_argument('-i', '--input', metavar="FILE", help = "Fastq files")
 #
-#    Add argument for where assembly text file required for cuffmerge is
+#    Add arguments ruffus needs a more useful help file
 #
 parser.add_argument('--cuffdiff_file', metavar="FILE", help = "cuffdiff comparison instructions")
 parser.add_argument('--basedir', metavar="DIR", help = "base directory")
