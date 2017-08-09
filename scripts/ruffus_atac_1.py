@@ -500,8 +500,7 @@ def tn5_shft(input_file, output_file, out_dir, logger, logger_mutex):
          "cp {out_dir}/{PR2_TA_FILE} . \n"
          "for tag in *tagAlign.gz \n"
          "do zcat ""$tag"" | awk -F $'\t' 'BEGIN {OFS = FS}{ if ($6 == ""+"") {$2 = $2 + 4} else if ($6 == ""-"") {$3 = $3 - 5} print $0}' | gzip -nc > ""${tag:0:${#tag}-12}.tn5.tagAlign.gz"" \n"
-         "mv *tn5* {out_dir} \n"
-
+         "mv *tn5* {out_dir} \n")
   cmd = cmd.format(**locals())
   try:
     stdout_res, stderr_res = "",""
