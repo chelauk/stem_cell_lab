@@ -436,11 +436,9 @@ def create_pseudoreplicates(input_file, output_file, out_dir, logger, logger_mut
            "{subpath[0][1]}/{1[0]}.cc.plot.pdf",
            "{subpath[0][1]}/bam",logger, logger_mutex)
 def phantom_peak_quals(input_file, output_file, out_dir, logger, logger_mutex):
-  print input_file
-  print output_file
   
   SUBSAMPLED_TA_FILE=os.path.basename(input_file)
-  SUBSAMPLED_TA_FILE=SUBSAMPLED_TA_FILE[:-25] + "PE2SE.tagAlign.gz"
+  SUBSAMPLED_TA_FILE=SUBSAMPLED_TA_FILE[:-25] + "filt.nodup.sample25.MATE1.tagAlign.gz"
   CC_SCORES_FILE=SUBSAMPLED_TA_FILE + ".cc.qc"
   CC_PLOT_FILE=SUBSAMPLED_TA_FILE + ".cc.plot.pdf"
  
@@ -485,7 +483,50 @@ def phantom_peak_quals(input_file, output_file, out_dir, logger, logger_mutex):
   with logger_mutex:
     logger.debug("create_pseudoreplicates")
 
+@transform(bam_to_tagAlign, formatter("([^/]+).final_filt_nmsrt.bedpe.gz$"),
+           "{subpath[0][1]}/{1[0]}.PE2SE.pr2.tn5.tagAlign.gz",
+           "{subpath[0][1]}/bam",logger, logger_mutex)
+def tn5_shft(input_file, output_file, out_dir, logger, logger_mutex):
+  TA_FILE=os.path.basename(input_file)
+  TA_FILE=TA_FILE[:-25] + "PE2SE.tagAlign.gz"
+  PR1_TA_FILE=TA_FILE[:-25] + "PE2SE.pr1.tagAlign.gz"
+  PR2_TA_FILE=TA_FILE[:-25] + "PE2SE.pr2.tagAlign.gz"
+  cmd = ("#==================================\n"
+         "# TN5 shift for atac seq           \n"
+         "#==================================\n"
+         "cd $TMPDIR \n"
+         "cp {out_dir}/{TA_FILE} . \n"
+         "cp {out_dir}/{PR1_TA_FILE} . \n"
+         "cp {out_dir}/{PR2_TA_FILE} . \n"
+         "for tag in *tagAlign.gz \n"
+         "do zcat ""$tag"" | awk -F $'\t' 'BEGIN {OFS = FS}{ if ($6 == ""+"") {$2 = $2 + 4} else if ($6 == ""-"") {$3 = $3 - 5} print $0}' | gzip -nc > ""${tag:0:${#tag}-12}.tn5.tagAlign.gz"" \n"
+         "mv *tn5* {out_dir} \n"
 
+  cmd = cmd.format(**locals())
+  try:
+    stdout_res, stderr_res = "",""
+    stdout_res, stderr_res = run_job(cmd,
+                                     job_name = "tn5_shift",
+                                     job_script_directory = "/home/sejjctj/Scratch/test_dir",
+                                     job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -w n -l mem=4G -l tmpfs=10G -wd /home/sejjctj/Scratch -j yes ",
+                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
+                                     working_directory    = "/home/sejjctj/Scratch/test_dir",
+                                     drmaa_session        = drmaa_session,
+                                     logger = logger )
+  except error_drmaa_job as err:
+    raise Exception("\n".join(map(str,
+                    ["Failed to run:",
+                      cmd,
+                      err,
+                      stdout_res,
+                      stderr_res])))
+
+  with logger_mutex:
+    logger.debug("tn5_shift")
+
+           
+ 
 
 if __name__ == '__main__':
   cmdline.run (options, multithread = options.jobs)
