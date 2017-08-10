@@ -300,18 +300,23 @@ def star(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
                             "{subpath[0][1]}/qc/qorts.log",
                              logger, logger_mutex )
 def qorts(input_file, output_file, log_file, logger, logger_mutex):
+    if hisat_check:
+       gtf="~/Scratch/reference/grch38/Homo_sapiens.GRCh38.84.gtf "
+    elif star_check:
+       gtf="~/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf "
     input_file = input_file[0]
     bam=os.path.basename(input_file)
-    cmd = (" cd $TMPDIR; mkdir tmp; "
-           " cp {input_file} ./ ; "
-           " samtools sort -n {bam} -m 24G temp ;"
-           " java -Xmx24G -Djava.io.tmpdir=./tmp "
-           " -jar ~/applications/QoRTs/QoRTs.jar QC " 
-           " --minMAPQ 60 "
-           " --maxReadLength 76 "
-           " --keepMultiMapped "
-           " temp.bam "
-           " ~/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf " + output_file + " " )
+    cmd = ("cd $TMPDIR \n"
+           "mkdir tmp \n"
+           "cp {input_file} ./ \n"
+           "samtools sort -n {bam} -m 24G temp \n"
+           "java -Xmx24G -Djava.io.tmpdir=./tmp \\\n"
+           "-jar ~/applications/QoRTs/QoRTs.jar QC \\\n" 
+           "--minMAPQ 60 \\\n"
+           "--maxReadLength 76 \\\n"
+           "--keepMultiMapped \\\n"
+           "temp.bam \\\n"
+           "{gtf}" + " " + "{output_file}" )
     cmd = cmd.format(**locals())
     #print cmd
     try:
@@ -438,7 +443,7 @@ def cufflinks(input_file, output_file, cuff_input, path, qc_path,logger, logger_
 #_______________________________________________________________________________________________________
 ################# USING -G flag for cufflinks, no novel Isoforms ######################################
 @active_if(star_check or hisat_check)
-@transform(star,formatter("([^/]+)bam$"), "{subpath[0][1]}/cufflinks/transcripts.gtf","{1[0]}bam", "{subpath[0][1]}/cufflinks","{subpath[0][1]}/qc",logger,logger_mutex)
+@transform([hisat2,star],formatter("([^/]+)bam$"), "{subpath[0][1]}/cufflinks/transcripts.gtf","{1[0]}bam", "{subpath[0][1]}/cufflinks","{subpath[0][1]}/qc",logger,logger_mutex)
 def cufflinks(input_file, output_file, cuff_input, path, qc_path,logger, logger_mutex):
   print input_file
 
