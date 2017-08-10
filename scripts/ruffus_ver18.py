@@ -48,13 +48,6 @@ print "Basedir: " + basedir
 #  standard python logger which can be synchronised across concurrent Ruffus tasks
 logger, logger_mutex = cmdline.setup_logging ("Chela", options.log_file, options.verbose)
 
-#                                                                                .
-#   Useful code to turn input files into a flat list                             .
-#                                                                                .
-#print "input " + options.input
-#print "basedir " + basedir
-#original_data_files = [fn for grouped in options.input for glob_spec in grouped for fn in glob(glob_spec)] if options.input else []
-#print options.input + "\n\n"
 if not aligner: 
     raise Exception ("Aligner not selected with --aligner")
 input_files=[]
@@ -62,6 +55,17 @@ files_list=options.input
 # print files_list
 if not files_list:
   raise Exception ("No matching files specified with --input.")
+#  Here I need to get more sophisticated and get the user to input a regex
+#  to parse and capture the fastq files and use the pattern later
+
+
+pattern = re.compile(r"/(?P<base_dir>[a-zA-Z0-9 ]+?)(?P<sample>[a-zA-Z0-9 ]+?)/(?P<replicate>[a-zA-Z0-9 ]+?)/(?P<fastq_raw>[a-zA-Z0-9 ]+?)")
+s = "/The Prodigy/The Fat Of The Land/04 - Funky Stuff.flac"
+m = pattern.search(s)
+print m.group('artist')
+print m.group('release')
+print m.group('track number')
+print m.group('title')
 
 with open(files_list, 'r') as f:
     content = [line.decode('utf-8').rstrip('\n') for line in f] 
@@ -155,6 +159,9 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
 # 
 #              take trimmer output and align with hisat2
 #_______________________________________________________________________________________________________
+## here we have a problem because this works for an eight-file sample (L001-4) but not for single end or
+## two-file sample
+
 @active_if(hisat_check)
 @collate(trim_fastq, formatter("([^/]+)_L00[1234]_R[12]_001_val_[12].fq.gz$"),
                                 "{subpath[0][1]}/bam/{1[0]}_L001_R1_001_val_1.fq.sorted.bam",
