@@ -1,0 +1,66 @@
+#!/bin/bash
+## request 6 hours
+#$ -l h_rt=06:00:00
+## request 8G memory
+#$ -l mem=8G
+## name of job
+#$ -N cufflinks
+## request 8 cores
+#$ -pe smp 8
+# 4. Request 100 gigabyte of TMPDIR space (default is 10 GB)
+#$ -l tmpfs=100G
+## maintain user environment
+#$ -V
+## join output streams
+#$ -j y
+## work must be done in tmpdir
+echo "working on " $HOSTNAME
+date
+
+bam_loc=$1
+wd=$2
+
+cd $TMPDIR || exit
+cp "$bam_loc" .
+
+ls -l
+# Given:
+# foo=/tmp/my.dir/filename.tar.gz
+# We can use these expressions:
+# path = ${foo%/*}
+# To get: /tmp/my.dir (like dirname)
+# file = ${foo##*/}
+# To get: filename.tar.gz (like basename)
+# base = ${file%%.*}
+# To get: filename
+# ext = ${file#*.}
+# To get: tar.gz
+# Note that the last two depend on the assignment made in the second one
+# Here we notice two different "operators" being used inside the parameters (curly braces). 
+# Those are the # and the % operators. We also see them used as single characters and in pairs. 
+# This gives us four combinations for trimming patterns off the beginning or end of a string:
+# ${variable%pattern}
+# Trim the shortest match from the end
+# ${variable##pattern}
+# Trim the longest match from the beginning
+# ${variable%%pattern}
+# Trim the shortest match from the end
+# ${variable#pattern}
+# Trim the shortest match from the beginning
+
+bam="${bam_loc##*/}"
+echo "$bam"
+
+mkdir reference
+
+samtools sort -@ 8 -m 2G "$bam" temp
+cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference
+cp $HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf ./reference
+cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference
+cufflinks -q -u --no-update-check -p 8 -G ./reference/Hs.GRCh38.84.exon.gtf \
+-b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa \
+--mask-file ./reference/ribosomal_mito_mask.gtf temp.bam  -o  ./
+
+mv ./*tracking "$wd"/cufflinks
+echo "Move done"
+rm -r ./*

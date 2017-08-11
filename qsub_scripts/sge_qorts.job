@@ -1,0 +1,32 @@
+#!/bin/bash -l
+# Batch script to run a serial job on Legion with the upgraded
+# software stack under SGE.
+# 1. Force bash as the executing shell.
+#$ -S /bin/bash
+# 2. Request 6 hours of wallclock time (format hours:minutes:seconds).
+#$ -l h_rt=6:00:0
+# 3. Request 24 gigabyte of RAM 
+#$ -l mem=48G
+# 4. Request 40 gigabyte of TMPDIR space (default is 10 GB)
+#$ -l tmpfs=40G
+# 5. Set the name of the job.
+#$ -N qorts
+# 6 join output streams
+#$ -j yes
+# 7 export job environment
+#$ -V
+
+wd=$1
+bam=$2
+output=$3
+gtf=$4
+logdir=$5
+
+cd "$TMPDIR" || exit
+mkdir tmp  
+cp "$wd"/"$bam"  ./ 
+ 
+
+java -Xmx48G -Djava.io.tmpdir=./tmp  -jar ~/applications/QoRTs/QoRTs.jar QC  \
+--keepMultiMapped  --minMAPQ 60  --maxReadLength 90 \
+"$bam" "$gtf" "$output"  &>"$logdir"/qorts.log

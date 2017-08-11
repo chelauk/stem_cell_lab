@@ -1,0 +1,78 @@
+#!/bin/bash -l
+# Batch script to run a serial job on Legion with the upgraded
+# software stack under SGE.
+# 1. Force bash as the executing shell.
+#$ -S /bin/bash
+# 2. Request 6 hours of wallclock time (format hours:minutes:seconds).
+#$ -l h_rt=6:00:0
+#$ -l mem=24G
+# 4. Request 40 gigabyte of TMPDIR space (default is 10 GB)
+#$ -l tmpfs=60G
+# 5. Set the name of the job.
+#$ -N idr
+# 6 join output streams
+#$ -j yes
+# 7 export job environment
+#$ -V
+# ======================
+# For narrowPeak files
+# ======================
+
+# The output from EM fitting: suffixed by overlapped-peaks.txt.png
+# The full set of peaks that overlap between the replicates with local and global IDR: suffixed by overlapped-peaks.txt ${IDR_OUTPUT}
+# IDR output file ${IDR_OUTPUT}
+# Columns 1-10 are same as pooled common peaks narrowPeak columns 
+# Col 11: -log10(local IDR value)
+# Col 12: -log10(global IDR value)
+# Col 15: ranking measure from Rep1
+# Col 19: ranking measure from Rep2
+#F inal IDR thresholded file ${REP1_VS_REP2}.IDR0.05.narrowPeak.gz
+# Final IDR thresholded file filtered using a blacklist ${REP1_VS_REP2}.IDR0.05.filt.narrowPeak.gz
+
+
+
+cd "$TMPDIR" || exit
+
+module unload python
+module load python3
+
+
+Pooled_narrowPeak_gz=$1
+Rep1_narrowPeak_gz=$2
+Rep2_narrowPeak_gz=$3
+output=$4
+wd=$5
+blacklist="/home/sejjctj/Scratch/reference/grch38/chipseq_blacklist/hg38.blacklist.bed.gz"
+
+
+IDR_THRESH=0.1 
+
+# =============================
+# Perform IDR analysis.
+# Generate a plot and IDR output with additional columns including IDR scores.
+# =============================
+
+idr --samples "$Rep1_narrowPeak_gz" "$Rep2_narrowPeak_gz" --peak-list "$Pooled_narrowPeak" \
+--input-file-type narrowPeak --output-file "$output" --rank p.value --soft-idr-threshold ${IDR_THRESH} --plot --use-best-multisummit-IDR
+
+# =============================
+# Get peaks passing IDR threshold of 10%
+# =============================
+IDR_THRESH_TRANSFORMED=$(awk -v p="$IDR_THRESH" 'BEGIN{print -log(p)/log(10)}')
+
+awk 'BEGIN{OFS="\t"} $12>='"$IDR_THRESH_TRANSFORMED"' {print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10}' "$output" | \
+sort | uniq | sort -k7n,7n | gzip -nc > REP1_VS_REP2.IDR0.1.narrowPeak.gz
+
+NPEAKS_IDR=$(zcat ${REP1_VS_REP2}.IDR0.05.narrowPeak.gz | wc -l)
+
+# =============================
+# Filter using black list
+# =============================
+bedtools intersect -v -a REP1_VS_REP2.IDR0.05.narrowPeak.gz -b "$blacklist" | awk 'BEGIN{OFS="\t"} {if ($5>1000) $5=1000; print $0}' | \
+grep -P 'chr[\dXY]+[ \t]'  | gzip -nc > REP1_VS_REP2.IDR0.1.filt.narrowPeak.gz
+
+
+mv "$output" "$wd"
+mv *png "$wd"
+mv REP1_VS_REP2.IDR0.1.narrowPeak.gz "$wd"
+

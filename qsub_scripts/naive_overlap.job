@@ -1,0 +1,55 @@
+#!/bin/bash -l
+# Batch script to run a serial job on Legion with the upgraded
+# software stack under SGE.
+# 1. Force bash as the executing shell.
+#$ -S /bin/bash
+# 2. Request 6 hours of wallclock time (format hours:minutes:seconds).
+#$ -l h_rt=6:00:0
+#$ -l mem=24G
+# 4. Request 40 gigabyte of TMPDIR space (default is 10 GB)
+#$ -l tmpfs=60G
+# 5. Set the name of the job.
+#$ -N naive_overlap
+# 6 join output streams
+#$ -j yes
+# 7 export job environment
+#$ -V
+# ======================
+# For narrowPeak files
+# ======================
+cd "$TMPDIR" || exit
+
+Pooled_narrowPeak_gz=$1
+Rep1_narrowPeak_gz=$2
+Rep2_narrowPeak_gz=$3
+PsRep1_narrowPeak_gz=$4
+PsRep2_narrowPeak_gz=$5
+prefix=$7
+wd=$8
+
+cp "$Pooled_narrowPeak_gz" .
+cp "$Rep1_narrowPeak_gz" .
+cp "$Rep2_narrowPeak_gz" .
+
+
+# Find pooled peaks that overlap Rep1 and Rep2 where overlap is defined as the fractional overlap wrt any one of the overlapping peak pairs  >= 0.5
+
+intersectBed -wo -a "$Pooled_narrowPeak_gz" -b "$Rep1_narrowPeak_gz" | 
+awk 'BEGIN{FS="\t";OFS="\t"}{s1=$3-$2; s2=$13-$12; if (($21/s1 >= 0.5) || ($21/s2 >= 0.5)) {print $0}}' | cut -f 1-10 | sort | uniq | \ 
+intersectBed -wo -a stdin -b "$Rep2_narrowPeak_gz" | \
+awk 'BEGIN{FS="\t";OFS="\t"}{s1=$3-$2; s2=$13-$12; if (($21/s1 >= 0.5) || ($21/s2 >= 0.5)) {print $0}}' | cut -f 1-10 | sort | uniq > PooledInRep1AndRep2_narrowPeak_gz
+
+# Find pooled peaks that overlap PooledPseudoRep1 and PooledPseudoRep2 where overlap is defined as the fractional overlap wrt any one of the overlapping peak pairs  >= 0.5
+
+
+intersectBed -wo -a "$Pooled_narrowPeak_gz" -b "$PsRep1_narrowPeak_gz" | \
+awk 'BEGIN{FS="\t";OFS="\t"}{s1=$3-$2; s2=$13-$12; if (($21/s1 >= 0.5) || ($21/s2 >= 0.5)) {print $0}}' | cut -f 1-10 | sort | uniq | \
+intersectBed -wo -a stdin -b "$PsRep2_narrowPeak_gz" | \
+awk 'BEGIN{FS="\t";OFS="\t"}{s1=$3-$2; s2=$13-$12; if (($21/s1 >= 0.5) || ($21/s2 >= 0.5)) {print $0}}' | cut -f 1-10 | sort | uniq > PooledInPsRep1AndPsRep2_narrowPeak_gz
+
+# Combine peak lists
+
+zcat PooledInRep1AndRep2_narrowPeak_gz PooledInPsRep1AndPsRep2_narrowPeak_gz | sort | uniq | awk 'BEGIN{OFS="\t"} {if ($5>1000) $5=1000; print $0}' \
+| grep -P 'chr[\dXY]+[ \t]' > finalPeakList.narrowPeak.gz
+
+mv finalPeakList.narrowPeak.gz "$wd"/"$prefix".gz

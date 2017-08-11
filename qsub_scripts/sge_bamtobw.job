@@ -1,0 +1,27 @@
+#!/bin/bash
+## request 6 hours
+#$ -l h_rt=01:00:00
+## request 48G memory
+#$ -l mem=24G
+## name of job
+#$ -N bigwig
+# 4. Request 100 gigabyte of TMPDIR space (default is 10 GB)
+#$ -l tmpfs=10G
+## maintain user environment
+#$ -V
+## join output streams
+#$ -j y
+## work must be done in tmpdir
+cd "$TMPDIR"  || exit
+echo "working in $HOSTNAME"
+wd=$1
+bam=$2
+
+cp "$wd"/$bam .
+
+echo "copy done"
+
+ls -l
+~/applications/bamtobw.py
+
+mv ./*bw "$wd"

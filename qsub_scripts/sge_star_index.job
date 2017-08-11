@@ -1,0 +1,41 @@
+#!/bin/bash
+## request 6 hours
+#$ -l h_rt=06:00:00
+## request 48G memory
+#$ -l mem=48G
+## name of job
+#$ -N STAR_index
+## request 4 cors
+#$ -pe smp 4
+# 4. Request 100 gigabyte of TMPDIR space (default is 10 GB)
+#$ -l tmpfs=100G
+## maintain user environment
+#$ -V
+## join output streams
+#$ -j y
+## work must be done in tmpdir
+cd "$TMPDIR"  || exit
+echo "working in $HOSTNAME"
+reference_dir=$1
+index_dir=$2
+
+mkdir reference
+mkdir index
+
+cp "$reference_dir"/Homo_sapiens.GRCh38.dna.primary_ercc.fa ./reference
+cp "$reference_dir"/Hs.GRCh38.84.exon.ercc.gtf ./reference
+
+echo "copy done"
+tree
+
+~/applications/STAR-2.5.3a/bin/Linux_x86_64/STAR \
+--runThreadN 4 \
+--runMode genomeGenerate \
+--genomeDir ./index \
+--genomeFastaFiles ./reference/Homo_sapiens.GRCh38.dna.primary_ercc.fa \
+--sjdbGTFfile ./reference/Hs.GRCh38.84.exon.ercc.gtf \
+--sjdbOverhang 75
+
+mv index/* $index_dir
+echo "Move done"
+rm -r ./*
