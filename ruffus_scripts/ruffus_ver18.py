@@ -1,15 +1,4 @@
 #!/usr/bin/env python
-
-#######################################################################################
-# An RNA seq pipeline developed by Chela James using the ruffus package               #
-# http://www.ruffus.org.uk/                                                           #
-# current version:                                                                    #
-# * trim galore --hisat-----bam---QORTS (qc and DESEQ2 counts)                        # 
-#                 |-STAR----|    |-cufflinks-fpkms-cuffdiff                           #
-#                 |-kallisto-tsv(for sleuth)                                          #
-# notes:                                                                              #                                                                    
-# currently cuffdiff using the -G option for known transcripts from gtf file          #
-#######################################################################################
 from glob import glob
 import glob
 import sys, os, fnmatch
@@ -17,13 +6,12 @@ import re
 from ruffus import *
 import ruffus.cmdline as cmdline
 from subprocess import check_call
-
-parser = cmdline.get_argparse(description="Standard RNAseq Pipeline")
+parser = cmdline.get_argparse(description="Chela's Pipeline")
 
 #parser.add_argument('-i', '--input', nargs='+', metavar="FILE", action="append", help = "Fastq files")
 parser.add_argument('-i', '--input', metavar="FILE", help = "Fastq files")
 #
-#    Add arguments ruffus needs a more useful help file
+#    Add argument for where assembly text file required for cuffmerge is
 #
 parser.add_argument('--cuffdiff_file', metavar="FILE", help = "cuffdiff comparison instructions")
 parser.add_argument('--basedir', metavar="DIR", help = "base directory")
@@ -48,6 +36,13 @@ print "Basedir: " + basedir
 #  standard python logger which can be synchronised across concurrent Ruffus tasks
 logger, logger_mutex = cmdline.setup_logging ("Chela", options.log_file, options.verbose)
 
+#                                                                                .
+#   Useful code to turn input files into a flat list                             .
+#                                                                                .
+#print "input " + options.input
+#print "basedir " + basedir
+#original_data_files = [fn for grouped in options.input for glob_spec in grouped for fn in glob(glob_spec)] if options.input else []
+#print options.input + "\n\n"
 if not aligner: 
     raise Exception ("Aligner not selected with --aligner")
 input_files=[]
@@ -55,29 +50,18 @@ files_list=options.input
 # print files_list
 if not files_list:
   raise Exception ("No matching files specified with --input.")
-#  Here I need to get more sophisticated and get the user to input a regex
-#  to parse and capture the fastq files and use the pattern later
-
-
-pattern = re.compile(r"/(?P<base_dir>[a-zA-Z0-9 ]+?)(?P<sample>[a-zA-Z0-9 ]+?)/(?P<replicate>[a-zA-Z0-9 ]+?)/(?P<fastq_raw>[a-zA-Z0-9 ]+?)")
-s = "/The Prodigy/The Fat Of The Land/04 - Funky Stuff.flac"
-m = pattern.search(s)
-print m.group('artist')
-print m.group('release')
-print m.group('track number')
-print m.group('title')
 
 with open(files_list, 'r') as f:
     content = [line.decode('utf-8').rstrip('\n') for line in f] 
     for line in content:
-    #print(line)
+        print(line)
         line = line.rstrip()
-        #print(basedir + line)
+        print(basedir + line)
         #print glob.glob(basedir + line + "/replicate*/fastq_raw/*gz")
         input_files.append(glob.glob(basedir + line + "/replicate*/fastq_raw/*gz"))  
 input_files = [item for sublist in input_files for item in sublist]  
 #print input_files
-#start drmaa_session
+# start drmaa_session
 from ruffus.drmaa_wrapper import run_job, error_drmaa_job
 import drmaa
 drmaa_session = drmaa.Session()
@@ -159,9 +143,6 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
 # 
 #              take trimmer output and align with hisat2
 #_______________________________________________________________________________________________________
-## here we have a problem because this works for an eight-file sample (L001-4) but not for single end or
-## two-file sample
-
 @active_if(hisat_check)
 @collate(trim_fastq, formatter("([^/]+)_L00[1234]_R[12]_001_val_[12].fq.gz$"),
                                 "{subpath[0][1]}/bam/{1[0]}_L001_R1_001_val_1.fq.sorted.bam",
@@ -222,13 +203,16 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
 #              take trimmer output and align with star
 #_______________________________________________________________________________________________________
 @active_if(star_check)
-@collate(trim_fastq, formatter("([^/]+)_L00[1234]_R[12]_001_val_[12].fq.gz$"),
-                              "{subpath[0][1]}/bam/{1[0]}.Aligned.sortedByCoord.out.bam",
-                              "{path[0]}","{subpath[0][1]}/bam",
-		              "{subpath[0][1]}/qc",
+@collate(trim_fastq, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<trimmed_dir>fastq_trimmed)/(?P<fastq>[a-zA-Z0-9_\-\.]+$)"),
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/bam/{sample[0]}.Aligned.sortedByCoord.out.bam",
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/{trimmed_dir[0]}",
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",
+		              "{sample[0]}",
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
                                logger, logger_mutex)
-def star(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
+def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mutex):
   flat_list = [item for sublist in input_files for item in sublist]
+  print(flat_list)
   first_reads = []
   second_reads =[]
   for i in flat_list:
@@ -241,15 +225,17 @@ def star(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
   star_output = out_file.split('/')
   star_output = star_output[-1]
   #print star_output
-  cmd = ( "cd $TMPDIR ; "
-          "cp  {path}"  + "/*fq.gz" + " . ; "
-          "~/applications/STAR-2.5.3a/bin/Linux_x86_64/STAR --runThreadN 4 "
-          "--genomeDir ~/Scratch/reference/star_single_cell/index/ "
-          "--readFilesIn " + first_reads + " " + second_reads + " "
-          "--readFilesCommand zcat " 
-          "--outFileNamePrefix " + star_output[:-35] + " "
-          "--outSAMtype BAM SortedByCoordinate ; "  
-          "cp *bam {outpath} ; "
+  cmd = ( "cd $TMPDIR \n "
+          "cp {path}/*fq.gz  . \n "
+          "~/applications/STAR-2.5.3a/bin/Linux_x86_64/STAR --runThreadN 4 \\\n"
+          "--genomeDir ~/Scratch/reference/star_single_cell/index/ \\\n"
+          "--readFilesIn " + first_reads + " " + second_reads + " \\\n"
+          "--readFilesCommand zcat \\\n" 
+          "--outSAMstrandField intronMotif \\\n"
+          "--outFilterIntronMotifs RemoveNoncanonical \\\n" ## added for compatibility with
+          "--outFileNamePrefix {sample} \\\n"               ## cufflinks
+          "--outSAMtype BAM SortedByCoordinate \\\n"  
+          "cp *bam {outpath} \\\n"
           "cp *Log.* {qc_folder} ")
   cmd = cmd.format(**locals())
   print cmd
@@ -282,41 +268,22 @@ def star(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
 #              run QoRTs
 #_______________________________________________________________________________________________________
 
-'''
-
-
-    with open(files_list, 'r') as f:
-        content = [line.decode('utf-8').rstrip('\n') for line in f] 
-        for line in content:
-            #print(line)
-            line = line.rstrip()
-            #print(basedir + line)
-            #print glob.glob(basedir + line + "/replicate*/bam/*bam")
-            input_files.append(glob.glob(basedir + line + "/replicate*/bam/*bam"))  
-    bam_list = [item for sublist in input_files for item in sublist]  
-    return bam_list
-'''
-@collate([hisat2,star],formatter("([^/]+)bam$"),"{subpath[0][1]}/qc/QC.summary.txt", 
-                            "{subpath[0][1]}/qc/qorts.log",
+@collate([hisat2,star],formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<bam_file>[a-zA-Z0-9_\-\.]+$)"),
+                            "{basedir[0]}/{sample[0]}/{replicate[0]}/qc/QC.summary.txt", 
+                            "{basedir[0]}/{sample[0]}/{replicate[0]}/qc/qorts.log",
                              logger, logger_mutex )
 def qorts(input_file, output_file, log_file, logger, logger_mutex):
-    if hisat_check:
-       gtf="~/Scratch/reference/grch38/Homo_sapiens.GRCh38.84.gtf "
-    elif star_check:
-       gtf="~/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf "
-    input_file = input_file[0]
     bam=os.path.basename(input_file)
-    cmd = ("cd $TMPDIR \n"
-           "mkdir tmp \n"
-           "cp {input_file} ./ \n"
-           "samtools sort -n {bam} -m 24G temp \n"
-           "java -Xmx24G -Djava.io.tmpdir=./tmp \\\n"
-           "-jar ~/applications/QoRTs/QoRTs.jar QC \\\n" 
-           "--minMAPQ 60 \\\n"
-           "--maxReadLength 76 \\\n"
-           "--keepMultiMapped \\\n"
-           "temp.bam \\\n"
-           "{gtf}" + " " + "{output_file}" )
+    cmd = (" cd $TMPDIR; mkdir tmp \n"
+           " cp {input_file} ./ \n"
+           " samtools sort -n {bam} -m 24G temp \n"
+           " java -Xmx24G -Djava.io.tmpdir=./tmp \\\n"
+           " -jar ~/applications/QoRTs/QoRTs.jar QC \\\n" 
+           " --minMAPQ 60 \\\n"
+           " --maxReadLength 76 \\\n"
+           " --keepMultiMapped \\\n"
+           " temp.bam \\\n"
+           " ~/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf output_file " )
     cmd = cmd.format(**locals())
     #print cmd
     try:
@@ -390,74 +357,32 @@ def kallisto(input_files, output_file, path,kallisto_folder,qc_folder):
 
 
 #_______________________________________________________________________________________________________
-#
-#              cufflinks generate gtf files from sorted hisat output
-#_______________________________________________________________________________________________________
 ################# USING -G flag for cufflinks, no novel Isoforms ######################################
-'''
-@active_if(hisat_check)
-@transform(hisat2,formatter("([^/]+)bam$"), "{subpath[0][1]}/cufflinks/transcripts.gtf","{1[0]}bam", "{subpath[0][1]}/cufflinks","{subpath[0][1]}/qc",logger,logger_mutex)
-def cufflinks(input_file, output_file, cuff_input, path, qc_path,logger, logger_mutex):
-  print input_file
-
-  cmd = ( " cd $TMPDIR ; "
-          " mkdir reference ; "
-          " cp {input_file} . ; "
-          " samtools sort -@ 8 -m 2G {cuff_input} temp ;"
-          " cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  ; "
-          " cp $HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf ./reference ; "
-          " cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference ; "
-          " cufflinks -q -u --no-update-check -p 8 -G ./reference/Hs.GRCh38.84.exon.gtf "
-          " -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa "
-          " --mask-file ./reference/ribosomal_mito_mask.gtf temp.bam  -o  {path}  2>{qc_path}/cufflinks.log ; "
-          " rm -r * ; " )
-  cmd = cmd.format(**locals())
-  #print cmd
-  try:
-    stdout_res, stderr_res = "",""
-    stdout_res, stderr_res = run_job(cmd,
-                                     job_name = "cufflinks",
-                                     job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                     job_other_options    = "-w n -S /bin/bash -V -l h_rt=04:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
-                                     retain_job_scripts   = True,
-                                     working_directory    = "/home/sejjctj/Scratch",
-                                     drmaa_session        = drmaa_session,
-                                     logger = logger )
-
-  except error_drmaa_job as err:
-    raise Exception("\n".join(map(str,
-                      ["Failed to run:",
-                        cmd,
-                        err,
-                        stdout_res,
-                        stderr_res])))
-
-  with logger_mutex:
-    logger.debug("cufflinks worked")
-
-'''
 #_______________________________________________________________________________________________________
 #
-#              cufflinks generate gtf files from sorted hisat output
+#              cufflinks generate gtf files from sorted hisat/star output
 #_______________________________________________________________________________________________________
 ################# USING -G flag for cufflinks, no novel Isoforms ######################################
 @active_if(star_check or hisat_check)
-@transform([hisat2,star],formatter("([^/]+)bam$"), "{subpath[0][1]}/cufflinks/transcripts.gtf","{1[0]}bam", "{subpath[0][1]}/cufflinks","{subpath[0][1]}/qc",logger,logger_mutex)
-def cufflinks(input_file, output_file, cuff_input, path, qc_path,logger, logger_mutex):
-  print input_file
-
-  cmd = ( " cd $TMPDIR ; "
-          " mkdir reference ; "
-          " cp {input_file} . ; "
-          " samtools sort -@ 8 -m 2G {cuff_input} temp ;"
-          " cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  ; "
-          " cp $HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf ./reference ; "
-          " cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference ; "
-          " cufflinks -q -u --no-update-check -p 8 -G ./reference/Hs.GRCh38.84.exon.gtf "
-          " -b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa "
-          " --mask-file ./reference/ribosomal_mito_mask.gtf temp.bam  -o  {path}  2>{qc_path}/cufflinks.log ; "
-          " rm -r * ; " )
+@transform([hisat2,star],formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<bam_file>[a-zA-Z0-9_\-\.]+$)"),
+                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks/transcripts.gtf",
+                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks",
+                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
+                                   logger,logger_mutex)
+def cufflinks(input_file, output_file, path, qc_path,logger, logger_mutex):
+  bam=os.path.basename(input_file)
+  cmd = ( "cd $TMPDIR \n"
+          "mkdir reference \n"
+          "cp {input_file} . \n"
+          "samtools sort -@ 8 -m 2G {bam} temp \n"
+          "cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  \n"
+          "cp $HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf ./reference \n"
+          "cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference \n"
+          "cufflinks -q -u --no-update-check -p 8 -G ./reference/Hs.GRCh38.84.exon.gtf \\\n"
+          "-b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa \\\n"
+          "--mask-file ./reference/ribosomal_mito_mask.gtf temp.bam  \\\n"
+          "-o  {path}  \\\n"
+          "2>{qc_path}/cufflinks.log \n" )
   cmd = cmd.format(**locals())
   #print cmd
   try:
