@@ -9,7 +9,7 @@
 # 4. Request 40 gigabyte of TMPDIR space (default is 10 GB)
 #$ -l tmpfs=60G
 # 5. Set the name of the job.
-#$ -N pool_atac
+#$ -N callpeaks
 # 6 join output streams
 #$ -j yes
 # 7 export job environment
@@ -20,34 +20,17 @@
 
 cd "$TMPDIR" || exit
 
-REP1_TA_FILE=$1         #rep1 Tagalign
-REP2_TA_FILE=$2         #rep2 Tagalign
-POOLED_TA_FILE=$3       #pooled TA file  
-REP1_PR1_TA_FILE=$4     #rep1 pseudoreplicate
-REP1_PR2_TA_FILE=$5     #rep1 pseudoreplicate
-REP2_PR1_TA_FILE=$6     #rep2 pseudoreplicate
-REP2_PR2_TA_FILE=$7     #rep2 pseudoreplicate
-PPR1_TA_FILE=$8         #pooled pseudoreplicate1
-PPR2_TA_FILE=$9         #pooled pseudoreplicate2
-wd=${10}
+tag=$1         # Tagalign
+wd=$2              # working directory
 
 #============================
 # copy tag align to $TMPDIR
 #============================
 
-cp "$REP1_TA_FILE" .
-cp "$REP2_TA_FILE" .
-cp "$POOLED_TA_FILE" .
-cp "$REP1_PR1_TA_FILE" .
-cp "$REP1_PR2_TA_FILE" .
-cp "$REP2_PR1_TA_FILE" .
-cp "$REP2_PR2_TA_FILE" .
-cp "$PPR1_TA_FILE" .
+cp "$wd"/"$TA_FILE" .
 cp "$PPR2_TA_FILE" .
 
 
-for tag in ./*gz
-do
 prefix=${tag:0:${#tag}-12} # remove .tagAlign.gz 
 peakfile="${prefix}.narrowPeak.gz"
 pval_thresh=0.01
@@ -99,6 +82,5 @@ rm -f "$pval_bedgraph" "$pval_bedgraph_srt"
 
 
 rm -f "$prefix"_treat_pileup.bdg "$prefix"_control_lambda.bdg
-done
 
-tar zcvf "$wd"/call_peaks_"$JOB_ID".tar.gz "$TMPDIR"
+cp ./"$prefix"* "$wd"

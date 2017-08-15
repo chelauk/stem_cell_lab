@@ -10,7 +10,7 @@
 # 4. Request 40 gigabyte of TMPDIR space (default is 10 GB)
 #$ -l tmpfs=10G
 # 5. Set the name of the job.
-#$ -N blacklist
+#$ -N tn5_shift
 # 6 join output streams
 #$ -j yes
 # 7 export job environment
@@ -22,15 +22,13 @@
 cd "$TMPDIR" || exit
 
 wd=$1
-narrowpeak=$2
+tag=$2
+prefix=$3
 
-cp "$wd"/"$narrowpeak" .
+cp "$wd"/"$tag" ./
 
-filtered_peak="${narrowpeak:0:${#narrowpeak}-3}".filt.gz    
-blacklist="/home/sejjctj/Scratch/reference/grch38/chipseq_blacklist/hg38.blacklist.bed.gz"
+shifted_tag="$prefix.tn5.tagAlign.gz"
 
-bedtools intersect -v -a "$narrowpeak" -b "$blacklist" \
-   		 | awk 'BEGIN{OFS="\t"} {if ($5>1000) $5=1000; print $0}' \
-   		 | grep -P 'chr[\dXY]+[ \t]'  | gzip -nc > "$filtered_peak"
+zcat "$tag" | awk -F $'\t' 'BEGIN {OFS = FS}{ if ($6 == "+") {$2 = $2 + 4} else if ($6 == "-") {$3 = $3 - 5} print $0}' | gzip -nc > "$shifted_tag"
 
-mv "$filtered_peak"  "$wd"
+mv "$shifted_tag" "$wd"
