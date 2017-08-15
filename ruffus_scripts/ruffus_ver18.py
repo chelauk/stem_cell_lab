@@ -6,16 +6,16 @@ import re
 from ruffus import *
 import ruffus.cmdline as cmdline
 from subprocess import check_call
-parser = cmdline.get_argparse(description="Chela's Pipeline")
+from ruffus.drmaa_wrapper import run_job, error_drmaa_job
+import drmaa
 
-#parser.add_argument('-i', '--input', nargs='+', metavar="FILE", action="append", help = "Fastq files")
+### parse command line for arguments
+
+parser = cmdline.get_argparse(description="Chela's Pipeline")
 parser.add_argument('-i', '--input', metavar="FILE", help = "Fastq files")
-#
-#    Add argument for where assembly text file required for cuffmerge is
-#
 parser.add_argument('--cuffdiff_file', metavar="FILE", help = "cuffdiff comparison instructions")
 parser.add_argument('--basedir', metavar="DIR", help = "base directory")
-parser.add_argument('--aligner', metavar="choice", help = "choice of aligner")
+parser.add_argument('--aligner', metavar="choice", help = "choice of aligner; enter hisat or star")
 parser.add_argument('--kallisto', metavar="choice", help = "use kallisto?")
 
 options = parser.parse_args()
@@ -32,38 +32,31 @@ print hisat_check
 print star_check
 
 print "Basedir: " + basedir
-# working directory
+
 #  standard python logger which can be synchronised across concurrent Ruffus tasks
 logger, logger_mutex = cmdline.setup_logging ("Chela", options.log_file, options.verbose)
 
-#                                                                                .
-#   Useful code to turn input files into a flat list                             .
-#                                                                                .
-#print "input " + options.input
-#print "basedir " + basedir
-#original_data_files = [fn for grouped in options.input for glob_spec in grouped for fn in glob(glob_spec)] if options.input else []
-#print options.input + "\n\n"
 if not aligner: 
     raise Exception ("Aligner not selected with --aligner")
-input_files=[]
 files_list=options.input
-# print files_list
 if not files_list:
-  raise Exception ("No matching files specified with --input.")
+  raise Exception ("No matching samples specified with --input.")
 
+input_files=[]
 with open(files_list, 'r') as f:
     content = [line.decode('utf-8').rstrip('\n') for line in f] 
     for line in content:
-        print(line)
+        #print(line)
         line = line.rstrip()
-        print(basedir + line)
-        #print glob.glob(basedir + line + "/replicate*/fastq_raw/*gz")
+        #print(basedir + line)
+        print "input " + str(glob.glob(basedir + line + "/replicate*/fastq_raw/*gz"))
         input_files.append(glob.glob(basedir + line + "/replicate*/fastq_raw/*gz"))  
+#                                                                                .
+#   Useful code to turn input files into a flat list                             .
+#                                                                                .
 input_files = [item for sublist in input_files for item in sublist]  
-#print input_files
+print input_files
 # start drmaa_session
-from ruffus.drmaa_wrapper import run_job, error_drmaa_job
-import drmaa
 drmaa_session = drmaa.Session()
 drmaa_session.initialize()
 
@@ -76,17 +69,17 @@ drmaa_session.initialize()
 #@mkdir(input_files,
 @mkdir(input_files,
        #match input pattern
-        formatter("([^/]+)$"),
+        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<fastq_dir>fastq_raw)/(?P<fastq_raw>[a-zA-Z0-9_\-\.]+$)"),
         # make qc directory
-        ["{subpath[0][1]}/qc",
+        ["{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
         # make trimmed_directory)
-        "{subpath[0][1]}/fastq_trimmed",
-        "{subpath[0][1]}/bam",
-        "{subpath[0][1]}/kallisto",
-        "{subpath[0][1]}/cufflinks",
-        "{subpath[0][3]}/cuffmerge_out",
-        "{subpath[0][3]}/cuffdiff",
-        "{subpath[0][1]}/cuffquant"])
+        "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed",
+        "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",
+        "{basedir[0]}/{sample[0]}/{replicate[0]}/kallisto",
+        "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks",
+        "{basedir[0]}/cuffmerge_out",
+        "{basedir[0]}/cuffdiff",
+        "{basedir[0]}/{sample[0]}/{replicate[0]}/cuffquant"])
 @collate(input_files,
         # input formatter to provide read pairs
         formatter("([^/]+)R[12](.+)gz"),
@@ -98,17 +91,16 @@ drmaa_session.initialize()
         "{subpath[0][1]}/fastq_trimmed",    # trimmed_folder
         logger, logger_mutex)
 def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,logger, logger_mutex):
-    
-    #print input_files
+    print "OUTPUT FILES!   " + str(output_files)    
     if len(input_files) !=2:
         raise Exception("One of the reads pairs %s missing" % (input_files,))
-    cmd = (" cd $TMPDIR ; "
-         " cp {input_files[0]} . ;"
-         " cp {input_files[1]} . ;"
-         " trim_galore --fastqc --paired {basenames[0]} {basenames[1]} 2> {qc_folder}/trim_galore.log ; "
-         " mv *val_*.fq.gz  {output_folder} ; "
-         " mv *fastqc*  {qc_folder} ; "
-         " mv *report* {qc_folder}; rm * ; " )
+    cmd = (" cd $TMPDIR \n"
+         " cp {input_files[0]} . \n"
+         " cp {input_files[1]} . \n"
+         " trim_galore --fastqc --paired {basenames[0]} {basenames[1]} 2> {qc_folder}/trim_galore.log \n"
+         " mv *val_*.fq.gz  {output_folder} \n"
+         " mv *fastqc*  {qc_folder} \n"
+         " mv *report* {qc_folder}; rm * \n" )
   
     job_name = "trim_fastqc"
   ## formats the cmd input to get the variables in the {}
@@ -144,10 +136,11 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
 #              take trimmer output and align with hisat2
 #_______________________________________________________________________________________________________
 @active_if(hisat_check)
-@collate(trim_fastq, formatter("([^/]+)_L00[1234]_R[12]_001_val_[12].fq.gz$"),
-                                "{subpath[0][1]}/bam/{1[0]}_L001_R1_001_val_1.fq.sorted.bam",
-                                "{path[0]}","{subpath[0][1]}/bam",
-                                "{subpath[0][1]}/qc",logger,logger_mutex)
+@collate(trim_fastq, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<fastq_trimmed>fastq_trimmed)/(?P<trimmed_fq>[a-zA-Z0-9_\-\.]+$)"),
+                                "{basedir[0]}/{sample[0]}/{replicate[0]}/bam/{sample[0]}.sorted.bam",
+                                "{basedir[0]}",
+                                "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",
+                                "{subpath[0]}/{sample[0]}/{replicate[0]}/qc",logger,logger_mutex)
 def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
     flat_list = [item for sublist in input_files for item in sublist]
     first_reads = []
@@ -162,18 +155,19 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
     hisat_output = out_file.split('/')
     hisat_output = hisat_output[-1]
 
-    cmd = ( " cd $TMPDIR ; "
-            " mkdir reference ; "
-            " cp  {path}"  + "/*fq.gz" + " . ; "
-            " cp $HOME/Scratch/reference/grch38_snp_tran/genome* ./reference ; "
-            " hisat2 -p 8 -x ./reference/genome_snp_tran  --dta-cufflinks "
-            " --novel-splicesite-outfile ./novel_splice.txt "
-            " --novel-splicesite-infile ./novel_splice.txt "
-            " -1 {first_reads} -2 {second_reads} 2> {qc_folder}/hisat.log | samtools view -bS - -o temp.bam ; "
-            " samtools sort -n -@ 4 temp.bam -m 2G " + hisat_output[:-4] + " 2>{qc_folder}/samtools.log ; "
-            " cp " + hisat_output + " {outpath} ; "
-            " cp novel_splice.txt {outpath} ; "
-            " rm -r * ; ")
+    cmd = ( "cd $TMPDIR \n"
+            "mkdir reference \n"
+            "cp  {path} /*fq.gz  . \n"
+            "cp $HOME/Scratch/reference/grch38_snp_tran/genome* ./reference \n"
+            "hisat2 -p 8 -x ./reference/genome_snp_tran  --dta-cufflinks \\\n"
+            "--novel-splicesite-outfile ./novel_splice.txt \\\n"
+            "--novel-splicesite-infile ./novel_splice.txt \\\n"
+            "-1 {first_reads} \\\n"
+            "-2 {second_reads} \\\n"
+            "2> {qc_folder}/hisat.log | samtools view -bS - -o temp.bam \\\n"
+            "samtools sort -n -@ 4 temp.bam -m 2G " + hisat_output[:-4] + " 2>{qc_folder}/samtools.log \\\n"
+            "cp {hisat_output} {outpath} \n"
+            "cp novel_splice.txt {outpath} \n")
     cmd = cmd.format(**locals())
     #print cmd
     try:
@@ -267,7 +261,7 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
 # 
 #              run QoRTs
 #_______________________________________________________________________________________________________
-
+@active_if(star_check or hisat_check)
 @collate([hisat2,star],formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<bam_file>[a-zA-Z0-9_\-\.]+$)"),
                             "{basedir[0]}/{sample[0]}/{replicate[0]}/qc/QC.summary.txt", 
                             "{basedir[0]}/{sample[0]}/{replicate[0]}/qc/qorts.log",
@@ -312,11 +306,11 @@ def qorts(input_file, output_file, log_file, logger, logger_mutex):
 
 
 @active_if(kallisto_check)
-@collate(trim_fastq,formatter("([^/]+)_L00[1234]_R[12]_001_val_[12].fq.gz$"),
-                              "{subpath[0][1]}/kallisto/abundance.tsv",
-                              "{path[0]}",
-                              "{subpath[0][1]}/kallisto",
-                              "{subpath[0][1]}/qc" )
+@collate(trim_fastq,formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<trimmed_dir>fastq_trimmed)/(?P<fastq>[a-zA-Z0-9_\-\.]+$)"),
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/kallisto/abundance.tsv",
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/{trimmed_dir[0]}",
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/kallisto",
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/qc" )
 def kallisto(input_files, output_file, path,kallisto_folder,qc_folder):
     input_files = [item for sublist in input_files for item in sublist]
     list_of_reads = []
@@ -324,12 +318,13 @@ def kallisto(input_files, output_file, path,kallisto_folder,qc_folder):
         list_of_reads.append(os.path.basename(filename))
     list_of_reads = ' '.join(list_of_reads)
 
-    cmd = (" cd $TMPDIR; mkdir reference; "
-         " cp {path}/*fq.gz   . ; "
-         " cp $HOME/Scratch/reference/hg38_ver84_transcripts.idx ./reference ; "
-         " kallisto quant -b 100 -t 4 -i ./reference/hg38_ver84_transcripts.idx " + list_of_reads +
-         " -o {kallisto_folder} ; "
-         " rm -r * ;")
+    cmd = ("cd $TMPDIR \n"
+           "mkdir reference \n"
+           "cp {path}/*fq.gz   . \n"
+           "cp $HOME/Scratch/reference/hg38_ver84_transcripts.idx ./reference \n"
+           "kallisto quant -b 100 -t 4 -i \\\n"
+           "./reference/hg38_ver84_transcripts.idx {list_of_reads} \\\n"
+           "-o {kallisto_folder}")
     cmd = cmd.format(**locals())
     try:
       stdout_res, stderr_res = "",""
