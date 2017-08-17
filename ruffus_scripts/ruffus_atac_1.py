@@ -448,7 +448,7 @@ def phantom_peak_quals(input_file, output_file, out_dir, outfile1,outfile2,logge
          "#########################\n"
          "cd $TMPDIR \n"
          "mkdir job_temp \n"
-         "cp {out_dir}/{SUBSAMPLED_TA_FILE} . \n"
+         "mv {out_dir}/{SUBSAMPLED_TA_FILE} . \n"
          "Rscript ~/applications/phantompeakqualtools/run_spp.R "
          " -c={SUBSAMPLED_TA_FILE} -filtchr=chrM "
          " -savp={outfile1} -out={outfile2} "
@@ -597,7 +597,47 @@ def macs2(input_file, output_file,out_dir, logger, logger_mutex):
     logger.debug("mac2_callpeaks")
 
 
+@transform(macs2, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-\.]+)(_S[0-9]+_L00[1234]_R[12]_[0-9]+_val_[0-9].+$)"),
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.PE2SE.pr2.tn5.narrowPeak.filt.gz",
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",logger, logger_mutex)
+def blacklist(input_file, output_file,out_dir, logger, logger_mutex): 
+  cmd = ("#===================================\n"
+         "#  run mac2 2 on tn5 shifted files  \n"
+         "#===================================\n"
+         "cd $TMPDIR \n"
+         "cp {out_dir}/*narrowPeak.gz . \n"
+         "for peak in *narrowPeak.gz \n"
+         "do \n"
+         "prefix=""${{tag:0:${{#tag}}-14}}""   #remove .narrowPeak.gz \n" 
+         "filtered_peak=""${{prefix}}.narrowPeak.filt.gz \n"
+         "bedtools intersect -v a ${{peak}} -b ${{blacklist}} \\\n"
+         "| awk 'BEGIN{{OFS=\"\\t\"}}{{if($5>1000) $5=1000; print $0}}' \\\n"
+         "| grep -P 'chr[\dXY]+[\\t]' | gzip -nc > ${{filtered_peak}} \n"
+         "mv ${{filtered_peak}} {out_dir} \n"
+         "done \n")
 
+  cmd = cmd.format(**locals())
+  try:
+    stdout_res, stderr_res = "",""
+    stdout_res, stderr_res = run_job(cmd,
+                                     job_name = "blacklist",
+                                     job_script_directory = "/home/sejjctj/Scratch/test_dir",
+                                     job_other_options    = "-S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=16G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
+                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
+                                     working_directory    = "/home/sejjctj/Scratch/test_dir",
+                                     drmaa_session        = drmaa_session,
+                                     logger = logger )
+  except error_drmaa_job as err:
+    raise Exception("\n".join(map(str,
+                    ["Failed to run:",
+                      cmd,
+                      err,
+                      stdout_res,
+                      stderr_res])))
+
+  with logger_mutex:
+    logger.debug("blacklist")
 
 
 if __name__ == '__main__':
