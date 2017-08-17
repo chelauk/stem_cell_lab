@@ -432,15 +432,16 @@ def create_pseudoreplicates(input_file, output_file, out_dir, logger, logger_mut
 
 
 
-@transform(bam_to_tagAlign, formatter("([^/]+).final_filt_nmsrt.bedpe.gz$"),
-           "{subpath[0][1]}/{1[0]}.cc.plot.pdf",
-           "{subpath[0][1]}/bam",logger, logger_mutex)
-def phantom_peak_quals(input_file, output_file, out_dir, logger, logger_mutex):
+@transform(bam_to_tagAlign, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<bed_pe>[a-zA-Z0-9_\-\.]+$)"),
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{sample[0]}.cc.plot.pdf",
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",
+           "{sample[0]}.cc.plot.pdf",
+           "{sample[0]}.cc.qc",
+           logger, logger_mutex)
+def phantom_peak_quals(input_file, output_file, out_dir, outfile1,outfile2,logger, logger_mutex):
   
   SUBSAMPLED_TA_FILE=os.path.basename(input_file)
   SUBSAMPLED_TA_FILE=SUBSAMPLED_TA_FILE[:-25] + "filt.nodup.sample25.MATE1.tagAlign.gz"
-  CC_SCORES_FILE=SUBSAMPLED_TA_FILE + ".cc.qc"
-  CC_PLOT_FILE=SUBSAMPLED_TA_FILE + ".cc.plot.pdf"
  
   cmd = ("#########################\n"
          "# run  phantompeakquals #\n"
@@ -450,14 +451,14 @@ def phantom_peak_quals(input_file, output_file, out_dir, logger, logger_mutex):
          "cp {out_dir}/{SUBSAMPLED_TA_FILE} . \n"
          "Rscript ~/applications/phantompeakqualtools/run_spp.R "
          " -c={SUBSAMPLED_TA_FILE} -filtchr=chrM "
-         " -savp={CC_PLOT_FILE} -out={CC_SCORES_FILE} "
+         " -savp={outfile1} -out={outfile2} "
          " -tmpdir=./job_temp \n" 
          "echo -e \"Filename\\tnumReads\\testFragLen\\tcorr_estFragLen\\tPhantomPeak\\tcorr_phantomPeak\\targmin_corr\\tmin_corr\\tphantomPeakCoef\\trelPhantomPeakCoef\\tQualityTag\" > header \n"
-         "sed -r 's/,[^\\t]+//g' {CC_SCORES_FILE} > temp \n"
+         "sed -r 's/,[^\\t]+//g' {outfile2} > temp \n"
          "cat header temp > temporary && mv temporary temp \n"
-         "mv temp {CC_SCORES_FILE} \n"
-         "mv {CC_SCORES_FILE} {out_dir}\n"
-         "mv *pdf {out_dir}")
+         "mv temp {outfile2} \n"
+         "mv {outfile2} {out_dir}\n"
+         "mv {outfile1} {out_dir}")
 
   cmd = cmd.format(**locals())
   try:
@@ -483,23 +484,19 @@ def phantom_peak_quals(input_file, output_file, out_dir, logger, logger_mutex):
   with logger_mutex:
     logger.debug("create_pseudoreplicates")
 
-@transform(bam_to_tagAlign, formatter("([^/]+).final_filt_nmsrt.bedpe.gz$"),
-           "{subpath[0][1]}/{1[0]}.PE2SE.pr2.tn5.tagAlign.gz",
-           "{subpath[0][1]}/bam",logger, logger_mutex)
-def tn5_shft(input_file, output_file, out_dir, logger, logger_mutex):
-  TA_FILE=os.path.basename(input_file)
-  TA_FILE=TA_FILE[:-25] + "PE2SE.tagAlign.gz"
-  PR1_TA_FILE=TA_FILE[:-25] + "PE2SE.pr1.tagAlign.gz"
-  PR2_TA_FILE=TA_FILE[:-25] + "PE2SE.pr2.tagAlign.gz"
+@transform(bam_to_tagAlign, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-\.]+_S[0-9]+_L00[1234]_R[12]_[0-9]+_val_[0-9]+.fq.sorted.filtered)(.final_filt_nmsrt.bedpe.gz$)"),
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.PE2SE.pr2.tn5.tagAlign.gz",
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",logger, logger_mutex)  
+def tn5_shift(input_file, output_file, out_dir, logger, logger_mutex):
   cmd = ("#==================================\n"
          "# TN5 shift for atac seq           \n"
          "#==================================\n"
          "cd $TMPDIR \n"
-         "cp {out_dir}/{TA_FILE} . \n"
-         "cp {out_dir}/{PR1_TA_FILE} . \n"
-         "cp {out_dir}/{PR2_TA_FILE} . \n"
+         "cp {out_dir}/*tagAlign.gz . \n"
          "for tag in *tagAlign.gz \n"
-         "do zcat ""$tag"" | awk -F $'\t' 'BEGIN {OFS = FS}{ if ($6 == ""+"") {$2 = $2 + 4} else if ($6 == ""-"") {$3 = $3 - 5} print $0}' | gzip -nc > ""${tag:0:${#tag}-12}.tn5.tagAlign.gz"" \n"
+         "do zcat ""$tag"" | awk -F $'\t' 'BEGIN {{OFS = FS}}{{ if ($6 == \"+\") {{$2 = $2 + 4}} else if ($6 == \"-\") {{$3 = $3 - 5}} print $0}}' | \\\n"
+         "gzip -nc > ""${{tag:0:${{#tag}}-12}}.tn5.tagAlign.gz"" \n"
+         "done \n"
          "mv *tn5* {out_dir} \n")
   cmd = cmd.format(**locals())
   try:
@@ -524,8 +521,84 @@ def tn5_shft(input_file, output_file, out_dir, logger, logger_mutex):
   with logger_mutex:
     logger.debug("tn5_shift")
 
-           
- 
+@transform(tn5_shift, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-\.]+)(_S[0-9]+_L00[1234]_R[12]_[0-9]+_val_[0-9].+$)"),
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.PE2SE.pr2.tn5.narrowPeak.gz",
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",logger, logger_mutex)
+def macs2(input_file, output_file,out_dir, logger, logger_mutex):
+  cmd = ("#===================================\n"
+         "#  run mac2 2 on tn5 shifted files  \n"
+         "#===================================\n"
+         "cd $TMPDIR \n"
+         "cp {out_dir}/*tn5.tagAlign.gz . \n"
+         "for tag in *tagAlign.gz \n"
+         "do \n"
+         "prefix=""${{tag:0:${{#tag}}-12}}""   #remove.tagAlign.gz \n" 
+         "peakfile=""${{prefix}}"".narrowPeak.gz \n"
+         "pval_thresh=0.01 \n"
+         "fc_bedgraph=""${{prefix}}"".fc.signal.bedgraph \n"
+         "fc_bedgraph_srt=""${{prefix}}"".fc.signal.srt.bedgraph \n"
+         "fc_bigwig=""${{prefix}}""_sig.fc.signal.bigwig \n"
+         "pval_bedgraph=""${{prefix}}"".pval.signal.bedgraph \n"
+         "pval_bedgraph_srt=""${{prefix}}"".pval.signal.srt.bedgraph \n"
+         "pval_bigwig=""${{prefix}}_sig.pval.signal.bigwig \n"
+         "chrsz=\"/home/sejjctj/Scratch/reference/grch38/hg38.chrom.sizes\" \n"
+         "## see https://github.com/taoliu/MACS/issues/145 for choice of --shift and --extsize \n"
+         "macs2 callpeak \\\n"
+         "-t ""$tag"" -f BED -n ""$prefix"" -g 2700000000 -p $pval_thresh \\\n"
+         "--nomodel --shift -100 --extsize 200 -B --SPMR --keep-dup all --call-summits \n"
+         "# Sort by Col8 in descending order and replace long peak names in Column 4 with Peak_<peakRank> \n"
+         "sort -k 8gr,8gr \"$prefix\"_peaks.narrowPeak | awk 'BEGIN{{OFS=\"\\t\"}}{{$4=""Peak_""NR ; print $0}}' | gzip -nc > ""$peakfile"" \n"
+         "rm -f \"$prefix\"_peaks.narrowPeak \n"
+         "rm -f \"$prefix\"_peaks.xls \n"
+         "rm -f \"$prefix\"_summits.bed \n"
+         "macs2 bdgcmp -t \"$prefix\"_treat_pileup.bdg -c \"$prefix\"_control_lambda.bdg \\\n"
+         "--o-prefix ""$prefix"" -m FE \n"
+         "slopBed -i \"$prefix\"_FE.bdg -g ""$chrsz"" -b 0 | bedClip stdin ""$chrsz"" ""$fc_bedgraph"" \n"
+         "rm -f ""$prefix""_FE.bdg \n"
+         "sort -k1,1 -k2,2n ""$fc_bedgraph"" > ""$fc_bedgraph_srt"" \n"
+         "bedGraphToBigWig ""$fc_bedgraph_srt"" ""$chrsz"" ""$fc_bigwig"" \n"
+         "rm -f ""$fc_bedgraph"" ""$fc_bedgraph_srt"" \n"
+         "# sval counts the number of tags per million in the compressed BED file \n"
+         "#sval=$(wc -l <(zcat -f \"$tag\" ) | awk '{{printf \"%f\", $1/1000000}}') \n"
+         "sval=$(zcat \"$tag\" | wc -l | awk '{{print $1/1000000}}') \n"
+         "macs2 bdgcmp \\\n"
+         "-t \"$prefix\"_treat_pileup.bdg -c \"$prefix\"_control_lambda.bdg \\\n"
+         "--o-prefix ""$prefix"" -m ppois -S ""${{sval}}"" \n"
+         "slopBed -i \"$prefix\"_ppois.bdg -g ""$chrsz"" -b 0 | \\\n"
+         "bedClip stdin ""$chrsz"" ""$pval_bedgraph"" \n"
+         "rm -f \"$prefix\"_ppois.bdg \n"
+         "sort -k1,1 -k2,2n ""$pval_bedgraph"" > ""$pval_bedgraph_srt"" \n"
+         "bedGraphToBigWig ""$pval_bedgraph_srt"" ""$chrsz"" ""$pval_bigwig"" \n"
+         "rm -f ""$pval_bedgraph"" ""$pval_bedgraph_srt"" \n"
+         "rm -f \"$prefix\"_treat_pileup.bdg \"$prefix\"_control_lambda.bdg \n"
+         "mv ./\"$prefix\"* {out_dir} \n"
+         "done \n")
+  cmd = cmd.format(**locals())
+  try:
+    stdout_res, stderr_res = "",""
+    stdout_res, stderr_res = run_job(cmd,
+                                     job_name = "macs2",
+                                     job_script_directory = "/home/sejjctj/Scratch/test_dir",
+                                     job_other_options    = "-S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=16G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
+                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
+                                     working_directory    = "/home/sejjctj/Scratch/test_dir",
+                                     drmaa_session        = drmaa_session,
+                                     logger = logger )
+  except error_drmaa_job as err:
+    raise Exception("\n".join(map(str,
+                    ["Failed to run:",
+                      cmd,
+                      err,
+                      stdout_res,
+                      stderr_res])))
+
+  with logger_mutex:
+    logger.debug("mac2_callpeaks")
+
+
+
+
 
 if __name__ == '__main__':
   cmdline.run (options, multithread = options.jobs)
