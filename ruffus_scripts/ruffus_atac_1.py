@@ -606,6 +606,7 @@ def blacklist(input_file, output_file,out_dir, logger, logger_mutex):
          "#===================================\n"
          "cd $TMPDIR \n"
          "cp {out_dir}/*narrowPeak.gz . \n"
+         "blacklist=\"/home/sejjctj/Scratch/reference/grch38/chipseq_blacklist/hg38.blacklist.bed.gz\" \n"
          "for peak in *narrowPeak.gz \n"
          "do \n"
          "prefix=""${{tag:0:${{#tag}}-14}}""   #remove .narrowPeak.gz \n" 
