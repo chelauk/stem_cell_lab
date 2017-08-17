@@ -521,8 +521,8 @@ def tn5_shift(input_file, output_file, out_dir, logger, logger_mutex):
   with logger_mutex:
     logger.debug("tn5_shift")
 
-@transform(tn5_shift, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-\.]+)(_S[0-9]+_L00[1234]_R[12]_[0-9]+_val_[0-9].+$)"),
-           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.PE2SE.pr2.tn5.narrowPeak.gz",
+@transform(tn5_shift, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-\.]+).tagAlign.gz$"),
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.narrowPeak.gz",
            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",logger, logger_mutex)
 def macs2(input_file, output_file,out_dir, logger, logger_mutex):
   cmd = ("#===================================\n"
@@ -597,7 +597,7 @@ def macs2(input_file, output_file,out_dir, logger, logger_mutex):
     logger.debug("mac2_callpeaks")
 
 
-@transform(macs2, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-\.]+)(_S[0-9]+_L00[1234]_R[12]_[0-9]+_val_[0-9].+$)"),
+@transform(macs2, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-\.]+)(.tn5.narrowPeak.gz$)"),
            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.PE2SE.pr2.tn5.narrowPeak.filt.gz",
            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",logger, logger_mutex)
 def blacklist(input_file, output_file,out_dir, logger, logger_mutex): 
