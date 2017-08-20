@@ -174,60 +174,67 @@ def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex)
 
 #_______________________________________________________________________________________________________
 
-@transform(bowtie2,formatter("([^/]+)bam$"),"{subpath[0][1]}/bam/{1[0]}.filt.nodup.srt.bam","{subpath[0][1]}/bam",
+@transform(bowtie2,formatter("([^/]+)bam$"),"{subpath[0][1]}/bam/{1[0]}filt.nodup.srt.bam","{subpath[0][1]}/bam",
                             "{subpath[0][1]}/qc/filtering.log",
                              logger, logger_mutex )
 def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, logger_mutex):
-  raw_bam=os.path.basename(input_file[0])
+  raw_bam=os.path.basename(input_file)
+  prefix=raw_bam[:-4]
   picard_loc="/shared/ucl/apps/picard-tools/1.136/picard-tools-1.136/"
   cmd=("cd $TMPDIR \n"
-       "cp {input_file[0]} . \n"
-       "prefix=${{raw_bam:0:${{#raw_bam}}-4}} \n"
-       "FILT_BAM_PREFIX=""$prefix"".filt.srt \n"
-       "FILT_BAM_FILE=""$FILT_BAM_PREFIX"".bam \n"
+       "cp {input_file} . \n"
+       "date \n"
+       "ls -l \n"
+       "FILT_BAM_PREFIX={prefix}.filt.srt \n"
+       "echo \"FILT_BAM_PREFIX\" \n"
+       "echo \"$FILT_BAM_PREFIX\" \n"
+       "FILT_BAM_FILE=\"$FILT_BAM_PREFIX\".bam \n"
        "MAPQ_THRESH=30 \n"
        "\n"
-       "samtools view -F 1804 -q ""$MAPQ_THRESH"" -b ""$raw_bam"" > ""$FILT_BAM_FILE"" \n"
+       "samtools view -F 1804 -q \"$MAPQ_THRESH\" -b {raw_bam} > \"$FILT_BAM_FILE\" \n"
+       "date \n"
+       "echo \"first filter done\" \n"
+       "ls -lh \n"
        "#=========================\n"
        "# Mark Duplicates \n"
        "#==========================\n"
-       "TMP_FILT_BAM_FILE=""$FILT_BAM_PREFIX"".dupmark.bam \n"
-       "DUP_FILE_QC=""$FILT_BAM_PREFIX"".dup.qc \n" 
+       "TMP_FILT_BAM_FILE=\"$FILT_BAM_PREFIX\".dupmark.bam \n"
+       "DUP_FILE_QC=\"$FILT_BAM_PREFIX\".dup.qc \n" 
        "\n"
-       "java -Xmx4G -jar {picard_loc}picard.jar MarkDuplicates INPUT=""$FILT_BAM_FILE"" OUTPUT=""$TMP_FILT_BAM_FILE"" METRICS_FILE=""$DUP_FILE_QC"" VALIDATION_STRINGENCY=LENIENT ASSUME_SORTED=true REMOVE_DUPLICATES=false \n"
-        "mv ""$TMP_FILT_BAM_FILE ""$FILT_BAM_FILE"" \n"
+       "java -Xmx4G -jar {picard_loc}picard.jar MarkDuplicates INPUT=\"$FILT_BAM_FILE\" OUTPUT=\"$TMP_FILT_BAM_FILE\" METRICS_FILE=\"$DUP_FILE_QC\" VALIDATION_STRINGENCY=LENIENT ASSUME_SORTED=true REMOVE_DUPLICATES=false \n"
+        "mv \"$TMP_FILT_BAM_FILE\" \"$FILT_BAM_FILE\" \n"
         "\n"
         "# ============================ \n"
         "# Remove duplicates\n"
         "# Index final position sorted BAM \n"
         "# ============================ \n"
-        "FINAL_BAM_PREFIX=""$prefix"".filt.nodup.srt \n"
-        "FINAL_BAM_FILE=""$FINAL_BAM_PREFIX"".bam \n" 
-        "FINAL_BAM_INDEX_FILE=""$FINAL_BAM_PREFIX"".bai \n"
-        "FINAL_BAM_FILE_MAPSTATS=""$FINAL_BAM_PREFIX"".flagstat.qc \n"
+        "FINAL_BAM_PREFIX=\"$prefix\".filt.nodup.srt \n"
+        "FINAL_BAM_FILE=\"$FINAL_BAM_PREFIX\".bam \n" 
+        "FINAL_BAM_INDEX_FILE=\"$FINAL_BAM_PREFIX\".bai \n"
+        "FINAL_BAM_FILE_MAPSTATS=\"$FINAL_BAM_PREFIX\".flagstat.qc \n"
         "\n"
-        "samtools view -F 1804 -b ""$FILT_BAM_FILE"" > ""$FINAL_BAM_FILE"" \n"
+        "samtools view -F 1804 -b \"$FILT_BAM_FILE\" > \"$FINAL_BAM_FILE\" \n"
         "\n"
         "# Index Final BAM file \n"
-        "samtools index ""$FINAL_BAM_FILE"" ""$FINAL_BAM_INDEX_FILE"" \n"
-        "samtools flagstat ""$FINAL_BAM_FILE"" > ""$FINAL_BAM_FILE_MAPSTATS"" \n"
+        "samtools index \"$FINAL_BAM_FILE\" \"$FINAL_BAM_INDEX_FILE\" \n"
+        "samtools flagstat \"$FINAL_BAM_FILE\" > \"$FINAL_BAM_FILE_MAPSTATS\" \n"
         "# Compute library complexity \n"
         "# ============================= \n"
         "# sort by position and strand \n"
         "# Obtain unique count statistics \n"
         "\n"
-        "PBC_FILE_QC=""FINAL_BAM_PREFIX"".pbc.qc \n"
+        "PBC_FILE_QC=\"$FINAL_BAM_PREFIX\".pbc.qc \n"
         "# PBC File output \n"
         "echo -e ""TotalReadPairs\\tDistinctReadPairs\\tOneReadPair\\tTwoReadPairs\\tNRF=Distinct/Total\\tPBC1=OnePair/Distinct\\tPBC2=OnePair/TwoPair"" > header \n"
-        "bedtools bamtobed -i ""$FILT_BAM_FILE"" | awk 'BEGIN{{OFS=\"\\t\"}}{{print $1,$2,$3,$6}}' | grep -v chrM | sort | uniq -c | awk 'BEGIN{{mt=0;m0=0;m1=0;m2=0}} ($1==1){{m1=m1+1}} ($1==2){{m2=m2+1}} {{m0=m0+1}} {{mt=mt+$1}} END{{printf ""%d\\t%d\\t%d\\t%d\\t%f\\t%f\\t%f\\n"",mt,m0,m1,m2,m0/mt,m1/m0,m1/m2}}' > ""$PBC_FILE_QC"" \n"
-        "mv ""$FINAL_BAM_FILE"" {out_dir} \n"
-        "cat header ""$PBC_FILE_QC"" > temp_file && mv temp_file ""PBC_FILE_QC"" \n"
-        "mv ""$PBC_FILE_QC"" {out_dir} \n"
-        "mv ""$FINAL_BAM_FILE"" {out_dir} \n")
-    cmd = cmd.format(**locals())
-    try:
-      stdout_res, stderr_res = "",""
-      stdout_res, stderr_res = run_job(cmd,
+        "bedtools bamtobed -i \"$FILT_BAM_FILE\" | awk 'BEGIN{{OFS=\"\\t\"}}{{print $1,$2,$3,$6}}' | grep -v chrM | sort | uniq -c | awk 'BEGIN{{mt=0;m0=0;m1=0;m2=0}} ($1==1){{m1=m1+1}} ($1==2){{m2=m2+1}} {{m0=m0+1}} {{mt=mt+$1}} END{{printf ""%d\\t%d\\t%d\\t%d\\t%f\\t%f\\t%f\\n"",mt,m0,m1,m2,m0/mt,m1/m0,m1/m2}}' > \"$PBC_FILE_QC\" \n"
+        "mv \"$FINAL_BAM_FILE\" {out_dir} \n"
+        "cat header \"$PBC_FILE_QC\" > temp_file && mv temp_file \"$PBC_FILE_QC\" \n"
+        "mv \"$PBC_FILE_QC\" {out_dir} \n"
+        "mv \"$FINAL_BAM_FILE\" {out_dir} \n")
+  cmd = cmd.format(**locals())
+  try:
+    stdout_res, stderr_res = "",""
+    stdout_res, stderr_res = run_job(cmd,
                                      job_name = "filter_bam",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                      job_other_options    = "-S /bin/bash -V -l h_rt=10:00:00 -w n -l mem=16G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
@@ -237,15 +244,15 @@ def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, log
                                      drmaa_session        = drmaa_session,
                                      logger = logger )
 
-    except error_drmaa_job as err:
-      raise Exception("\n".join(map(str,
+  except error_drmaa_job as err:
+    raise Exception("\n".join(map(str,
                       ["Failed to run:",
                         cmd,
                         err,
                         stdout_res,
                         stderr_res])))
 
-    with logger_mutex:
+  with logger_mutex:
       logger.debug("post_alignment_filter worked")
 
 @transform(post_alignment_filter,formatter("([^/]+).bam$"),
@@ -293,7 +300,7 @@ def bam_to_tagAlign(input_file, output_file, out_dir, logger, logger_mutex):
   with logger_mutex:
     logger.debug("bam_to_tagAlign worked")
 
-@transform(bam_to_tagAlign[1], formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<sub_sampled>[a-zA-Z0-9_\-\.]+$)"),
+@transform(bam_to_tagAlign, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<sub_sampled>[a-zA-Z0-9_]+.filt.nodup.sample.SE.tagAlign.gz$)"),
            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{sample[0]}.cc.plot.pdf",
            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",
            "{sample[0]}.cc.plot.pdf",
@@ -344,7 +351,9 @@ def phantom_peak_quals(input_file, output_file, out_dir, outfile1,outfile2,logge
 
   with logger_mutex:
     logger.debug("create_pseudoreplicates")
- 
+'''
+@transform(bam_to_tagAlign, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<sub_sampled>[a-zA-Z0-9_]+.filt.nodup.sample.SE.tagAlign.gz$)"),
+''' 
 if __name__ == '__main__':
   cmdline.run (options, multithread = options.jobs)
   drmaa_session.exit()
