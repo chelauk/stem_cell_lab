@@ -132,7 +132,7 @@ def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex)
             " bowtie2 -k 4 -X2000 --mm --local --threads 8 "
             " -x  ./reference/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.bowtie_index "
             " -U {reads} 2> {qc_folder}/bowtie2.log | samtools view -bS - -o temp.bam \n"
-            " samtools sort -n -@ 8 temp.bam -m 2G " + bowtie2_output[:-4] + " 2>{qc_folder}/samtools.log \n"
+            " samtools sort -@ 8 temp.bam -m 2G " + bowtie2_output[:-4] + " 2>{qc_folder}/samtools.log \n"
             " samtools flagstat {bowtie2_output} > {qc_folder}/{bowtie2_output}.mapstats \n"
             " cp {bowtie2_output} {outpath} \n"
             " rm -r * \n")
@@ -180,64 +180,73 @@ def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex)
 def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, logger_mutex):
   raw_bam=os.path.basename(input_file)
   prefix=raw_bam[:-4]
+  FILT_BAM_PREFIX=prefix + ".filt.srt"
+  FILT_BAM_FILE=FILT_BAM_PREFIX +".bam"
+  MAPQ_THRESH=30
+  TMP_FILT_BAM_FILE=FILT_BAM_PREFIX + "dupmark.bam"
+  DUP_FILE_QC=FILT_BAM_PREFIX + ".dup.qc"
+  FINAL_BAM_PREFIX=prefix + ".filt.nodup.srt"
+  FINAL_BAM_FILE=FINAL_BAM_PREFIX + ".bam"
+  FINAL_BAM_INDEX_FILE=FINAL_BAM_PREFIX + ".bai"
+  FINAL_BAM_FILE_MAPSTATS=FINAL_BAM_PREFIX + ".flagstat.qc"
+  PBC_FILE_QC=FINAL_BAM_PREFIX + ".pbc.qc"
   picard_loc="/shared/ucl/apps/picard-tools/1.136/picard-tools-1.136/"
   cmd=("cd $TMPDIR \n"
        "cp {input_file} . \n"
        "date \n"
        "ls -l \n"
-       "FILT_BAM_PREFIX={prefix}.filt.srt \n"
-       "echo \"FILT_BAM_PREFIX\" \n"
-       "echo \"$FILT_BAM_PREFIX\" \n"
-       "FILT_BAM_FILE=\"$FILT_BAM_PREFIX\".bam \n"
-       "MAPQ_THRESH=30 \n"
        "\n"
-       "samtools view -F 1804 -q \"$MAPQ_THRESH\" -b {raw_bam} > \"$FILT_BAM_FILE\" \n"
-       "date \n"
+       "samtools sort -@ 4 -m 8G {raw_bam} temporary \n"
+       "mv temporary.bam {raw_bam} \n"
+       "samtools view -@ 4 -F 1804 -q {MAPQ_THRESH} -b {raw_bam} > {FILT_BAM_FILE} \n"
+       "mv temporary_bam.bam {FILT_BAM_FILE} \n"
        "echo \"first filter done\" \n"
        "ls -lh \n"
        "#=========================\n"
        "# Mark Duplicates \n"
        "#==========================\n"
-       "TMP_FILT_BAM_FILE=\"$FILT_BAM_PREFIX\".dupmark.bam \n"
-       "DUP_FILE_QC=\"$FILT_BAM_PREFIX\".dup.qc \n" 
        "\n"
-       "java -Xmx4G -jar {picard_loc}picard.jar MarkDuplicates INPUT=\"$FILT_BAM_FILE\" OUTPUT=\"$TMP_FILT_BAM_FILE\" METRICS_FILE=\"$DUP_FILE_QC\" VALIDATION_STRINGENCY=LENIENT ASSUME_SORTED=true REMOVE_DUPLICATES=false \n"
-        "mv \"$TMP_FILT_BAM_FILE\" \"$FILT_BAM_FILE\" \n"
-        "\n"
-        "# ============================ \n"
-        "# Remove duplicates\n"
-        "# Index final position sorted BAM \n"
-        "# ============================ \n"
-        "FINAL_BAM_PREFIX=\"$prefix\".filt.nodup.srt \n"
-        "FINAL_BAM_FILE=\"$FINAL_BAM_PREFIX\".bam \n" 
-        "FINAL_BAM_INDEX_FILE=\"$FINAL_BAM_PREFIX\".bai \n"
-        "FINAL_BAM_FILE_MAPSTATS=\"$FINAL_BAM_PREFIX\".flagstat.qc \n"
-        "\n"
-        "samtools view -F 1804 -b \"$FILT_BAM_FILE\" > \"$FINAL_BAM_FILE\" \n"
-        "\n"
-        "# Index Final BAM file \n"
-        "samtools index \"$FINAL_BAM_FILE\" \"$FINAL_BAM_INDEX_FILE\" \n"
-        "samtools flagstat \"$FINAL_BAM_FILE\" > \"$FINAL_BAM_FILE_MAPSTATS\" \n"
-        "# Compute library complexity \n"
-        "# ============================= \n"
-        "# sort by position and strand \n"
-        "# Obtain unique count statistics \n"
-        "\n"
-        "PBC_FILE_QC=\"$FINAL_BAM_PREFIX\".pbc.qc \n"
-        "# PBC File output \n"
-        "echo -e ""TotalReadPairs\\tDistinctReadPairs\\tOneReadPair\\tTwoReadPairs\\tNRF=Distinct/Total\\tPBC1=OnePair/Distinct\\tPBC2=OnePair/TwoPair"" > header \n"
-        "bedtools bamtobed -i \"$FILT_BAM_FILE\" | awk 'BEGIN{{OFS=\"\\t\"}}{{print $1,$2,$3,$6}}' | grep -v chrM | sort | uniq -c | awk 'BEGIN{{mt=0;m0=0;m1=0;m2=0}} ($1==1){{m1=m1+1}} ($1==2){{m2=m2+1}} {{m0=m0+1}} {{mt=mt+$1}} END{{printf ""%d\\t%d\\t%d\\t%d\\t%f\\t%f\\t%f\\n"",mt,m0,m1,m2,m0/mt,m1/m0,m1/m2}}' > \"$PBC_FILE_QC\" \n"
-        "mv \"$FINAL_BAM_FILE\" {out_dir} \n"
-        "cat header \"$PBC_FILE_QC\" > temp_file && mv temp_file \"$PBC_FILE_QC\" \n"
-        "mv \"$PBC_FILE_QC\" {out_dir} \n"
-        "mv \"$FINAL_BAM_FILE\" {out_dir} \n")
+       "java -Xmx8G -jar {picard_loc}picard.jar MarkDuplicates INPUT={FILT_BAM_FILE} \\\n"
+       "OUTPUT={TMP_FILT_BAM_FILE} METRICS_FILE={DUP_FILE_QC} VALIDATION_STRINGENCY=LENIENT \\\n"
+       "ASSUME_SORTED=true REMOVE_DUPLICATES=false \n"
+       "mv {TMP_FILT_BAM_FILE} {FILT_BAM_FILE} \n"
+       "echo \"mark duplicates done\" \n"
+       "ls -lh \n"
+       "date \n"
+       "\n"
+       "# ============================ \n"
+       "# Remove duplicates\n"
+       "# Index final position sorted BAM \n"
+       "# ============================ \n"
+       "\n"
+       "samtools view -@ 4 -F 1804 -b {FILT_BAM_FILE} > {FINAL_BAM_FILE} \n"
+       "\n"
+       "# Index Final BAM file \n"
+       "samtools index {FINAL_BAM_FILE} {FINAL_BAM_INDEX_FILE} \n"
+       "samtools flagstat {FINAL_BAM_FILE} > {FINAL_BAM_FILE_MAPSTATS} \n"
+       "# Compute library complexity \n"
+       "# ============================= \n"
+       "# sort by position and strand \n"
+       "# Obtain unique count statistics \n"
+       "\n"
+       "PBC_FILE_QC={FINAL_BAM_PREFIX}.pbc.qc \n"
+       "# PBC File output \n"
+       "echo -e \"TotalReadPairs\\tDistinctReadPairs\\tOneReadPair\\tTwoReadPairs\\tNRF=Distinct/Total\\tPBC1=OnePair/Distinct\\tPBC2=OnePair/TwoPair\" > header \n"
+       "bedtools bamtobed -i {FILT_BAM_FILE} | awk 'BEGIN{{OFS=\"\\t\"}}{{print $1,$2,$3,$6}}' | \\\n"
+       "grep -v chrM | sort | uniq -c | awk 'BEGIN{{mt=0;m0=0;m1=0;m2=0}} ($1==1){{m1=m1+1}} ($1==2){{m2=m2+1}} \\\n"
+       "{{m0=m0+1}} {{mt=mt+$1}} END{{printf \"%d\\t%d\\t%d\\t%d\\t%f\\t%f\\t%f\\n\",mt,m0,m1,m2,m0/mt,m1/m0,m1/m2}}' \\\n"
+       "> {PBC_FILE_QC} \n"
+       "mv {FINAL_BAM_FILE} {out_dir} \n"
+       "cat header {PBC_FILE_QC} > temp_file && mv temp_file {PBC_FILE_QC} \n"
+       "mv {PBC_FILE_QC} {out_dir} \n"
+       "mv {FINAL_BAM_FILE} {out_dir} \n")
   cmd = cmd.format(**locals())
   try:
     stdout_res, stderr_res = "",""
     stdout_res, stderr_res = run_job(cmd,
                                      job_name = "filter_bam",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                     job_other_options    = "-S /bin/bash -V -l h_rt=10:00:00 -w n -l mem=16G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
+                                     job_other_options    = "-S /bin/bash -V -l h_rt=10:00:00 -w n -l mem=8G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
                                      job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch/test_dir",
@@ -255,26 +264,30 @@ def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, log
   with logger_mutex:
       logger.debug("post_alignment_filter worked")
 
-@transform(post_alignment_filter,formatter("([^/]+).bam$"),
-          ["{subpath[0][1]}/bam/{1[0]}.SE.tagAlign.gz","{subpath[0][1]}/bam/{1[0]}.filt.nodup.sample.SE.tagAlign.gz"], "{subpath[0][1]}/bam", logger, logger_mutex)
-def bam_to_tagAlign(input_file, output_file, out_dir, logger, logger_mutex):
+@transform(post_alignment_filter,formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-]+).fq.sorted.filt.nodup.srt.bam$"),
+          ["{basedir[0]}/{sample}[0]/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.SE.tagAlign.gz",
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.sample.SE.tagAlign.gz"],
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",
+           "{prefix[0]}",
+           logger, logger_mutex)
+def bam_to_tagAlign(input_file, output_file, out_dir,prefix, logger, logger_mutex):
   FINAL_BAM_FILE=os.path.basename(input_file)
-  FINAL_BAM_PREFIX=FINAL_BAM_FILE[:-4]
+  FINAL_BAM_PREFIX=prefix
   cmd = ("# =================== \n"
          "# Create tagAlign file \n"
          "# =================== \n"
          "cd $TMPDIR \n"
          "cp {input_file} . \n"
          "FINAL_TA_FILE={FINAL_BAM_PREFIX}.SE.tagAlign.gz \n"
-         "bedtools bamtobed -i {FINAL_BAM_FILE} | awk 'BEGIN{{OFS=\"\\t\"}}{{$4=\"N\";$5=\"1000\";print $0}}' | gzip -nc > {{FINAL_TA_FILE}} \n"
+         "bedtools bamtobed -i {FINAL_BAM_FILE} | awk 'BEGIN{{OFS=\"\\t\"}}{{$4=\"N\";$5=\"1000\";print $0}}' | gzip -nc > \"$FINAL_TA_FILE\" \n"
          "# ================================= \n"
          "# Subsample tagAlign file \n"
          "# ================================ \n"
          "NREADS=15000000 \n"
-         "SUBSAMPLED_TA_FILE={FINAL_BAM_PREFIX}.filt.nodup.sample.SE.tagAlign.gz\n"
-         "zcat ""$FINAL_TA_FILE"" | grep -v chrM | shuf -n ""$NREADS --random-source=""$FINAL_TA_FILE"" | gzip -nc > ""$SUBSAMPLED_TA_FILE"" \n"
-        "mv ""$SUBSAMPLED_TA_FILE"" {out_dir} \n"
-        "mv ""$FINAL_TA_FILE"" {out_dir} \n")
+         "SUBSAMPLED_TA_FILE={FINAL_BAM_PREFIX}.sample.SE.tagAlign.gz\n"
+         "zcat \"$FINAL_TA_FILE\" | grep -v chrM | shuf -n \"$NREADS\" --random-source=\"$FINAL_TA_FILE\" | gzip -nc > \"$SUBSAMPLED_TA_FILE\" \n"
+         "mv \"$SUBSAMPLED_TA_FILE\" {out_dir} \n"
+         "mv \"$FINAL_TA_FILE\" {out_dir}")
   cmd = cmd.format(**locals())
 
   try:
@@ -307,9 +320,7 @@ def bam_to_tagAlign(input_file, output_file, out_dir, logger, logger_mutex):
            "{sample[0]}.cc.qc",
            logger, logger_mutex)
 def phantom_peak_quals(input_file, output_file, out_dir, outfile1,outfile2,logger, logger_mutex):
-
   SUBSAMPLED_TA_FILE=os.path.basename(input_file)
-
   cmd = ("#########################\n"
          "# run  phantompeakquals #\n"
          "#########################\n"
