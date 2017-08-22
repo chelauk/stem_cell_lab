@@ -265,10 +265,9 @@ def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, log
       logger.debug("post_alignment_filter worked")
 
 @transform(post_alignment_filter,formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-]+).fq.sorted.filt.nodup.srt.bam$"),
-          ["{basedir[0]}/{sample}[0]/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.SE.tagAlign.gz",
-           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.sample.SE.tagAlign.gz"],
-           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",
-           "{prefix[0]}",
+           "{basedir}/{sample}/{replicate}/{bam_dir}/{prefix}.sample.tagAlign.gz",
+           "{basedir}/{sample}/{replicate}/{bam_dir}",
+           "{prefix}",
            logger, logger_mutex)
 def bam_to_tagAlign(input_file, output_file, out_dir,prefix, logger, logger_mutex):
   FINAL_BAM_FILE=os.path.basename(input_file)
@@ -277,8 +276,8 @@ def bam_to_tagAlign(input_file, output_file, out_dir,prefix, logger, logger_mute
          "# Create tagAlign file \n"
          "# =================== \n"
          "cd $TMPDIR \n"
-         "cp {input_file} . \n"
-         "FINAL_TA_FILE={FINAL_BAM_PREFIX}.SE.tagAlign.gz \n"
+         "cp {input_file[0]} . \n"
+         "FINAL_TA_FILE={FINAL_BAM_PREFIX}.tagAlign.gz \n"
          "bedtools bamtobed -i {FINAL_BAM_FILE} | awk 'BEGIN{{OFS=\"\\t\"}}{{$4=\"N\";$5=\"1000\";print $0}}' | gzip -nc > \"$FINAL_TA_FILE\" \n"
          "# ================================= \n"
          "# Subsample tagAlign file \n"
@@ -313,20 +312,21 @@ def bam_to_tagAlign(input_file, output_file, out_dir,prefix, logger, logger_mute
   with logger_mutex:
     logger.debug("bam_to_tagAlign worked")
 
-@transform(bam_to_tagAlign, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<sub_sampled>[a-zA-Z0-9_]+.filt.nodup.sample.SE.tagAlign.gz$)"),
-           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{sample[0]}.cc.plot.pdf",
-           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",
-           "{sample[0]}.cc.plot.pdf",
-           "{sample[0]}.cc.qc",
+@transform(bam_to_tagAlign, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-]+).sample.tagAlign.gz$"),
+           "{basedir}/{sample}/{replicate}/{bam_dir}/{sample}.cc.plot.pdf",
+           "{basedir}/{sample}/{replicate}/{bam_dir}",
+           "{sample}.cc.plot.pdf",
+           "{sample}.cc.qc",
            logger, logger_mutex)
 def phantom_peak_quals(input_file, output_file, out_dir, outfile1,outfile2,logger, logger_mutex):
   SUBSAMPLED_TA_FILE=os.path.basename(input_file)
+  SUBSAMPLED_TA_FILE=SUBSAMPLED_TA_FILE[:-11] + "sample.tagAlign.gz"
   cmd = ("#########################\n"
          "# run  phantompeakquals #\n"
          "#########################\n"
          "cd $TMPDIR \n"
          "mkdir job_temp \n"
-         "cp {input_file} . \n"
+         "cp {out_dir}/{SUBSAMPLED_TA_FILE} . \n"
          "Rscript ~/applications/phantompeakqualtools/run_spp.R "
          " -c={SUBSAMPLED_TA_FILE} -filtchr=chrM "
          " -savp={outfile1} -out={outfile2} "

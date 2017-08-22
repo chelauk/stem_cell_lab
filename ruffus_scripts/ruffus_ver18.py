@@ -164,7 +164,7 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
             "--novel-splicesite-infile ./novel_splice.txt \\\n"
             "-1 {first_reads} \\\n"
             "-2 {second_reads} \\\n"
-            "2> {qc_folder}/hisat.log | samtools view -bS - -o temp.bam \\\n"
+            "2> {qc_folder}/hisat.log | samtools view -bS - -o temp.bam \n"
             "samtools sort -n -@ 4 temp.bam -m 2G " + hisat_output[:-4] + " 2>{qc_folder}/samtools.log \\\n"
             "mv {hisat_output} {outpath} \n"
             "mv novel_splice.txt {outpath} \n")
