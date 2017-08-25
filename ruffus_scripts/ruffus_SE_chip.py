@@ -62,9 +62,8 @@ drmaa_session.initialize()
         "{subpath[0][1]}/bam"])
 @transform(input_files,
         # input formatter to provide reads
-        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<fastq_raw_dir>fastq_raw)/(?P<prefix>[a-zA-Z0-9_\-]+).fastq.gz$"),
-        # create output parameter to be supplied to next task
-	      "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{prefix[0]}_trimmed.fq.gz",
+        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<fastq_raw_dir>fastq_raw)/(?P<prefix>.+).fastq.gz$"),
+	"{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{prefix[0]}_trimmed.fq.gz",
         "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",               # qc folder
         "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed",    # trimmed_folder
         logger, logger_mutex)
@@ -111,7 +110,7 @@ def trim_fastq(input_file, output_files, qc_folder, output_folder ,logger, logge
 #
 #              take trimmer output and align with bowtie2
 #_______________________________________________________________________________________________________
-@collate(trim_fastq, formatter("([^/]+)_L00[1234]_R1_001_trimmed.fq.gz$"),
+@collate(trim_fastq, formatter("([^/]+)_trimmed.fq.gz$"),
                                 "{subpath[0][1]}/bam/{1[0]}.fq.sorted.bam",
                                 "{path[0]}","{subpath[0][1]}/bam",
                                 "{subpath[0][1]}/qc",logger,logger_mutex)
@@ -174,8 +173,10 @@ def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex)
 
 #_______________________________________________________________________________________________________
 
-@transform(bowtie2,formatter("([^/]+)bam$"),"{subpath[0][1]}/bam/{1[0]}filt.nodup.srt.bam","{subpath[0][1]}/bam",
-                            "{subpath[0][1]}/qc/filtering.log",
+@transform(bowtie2,formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>.+).bam$"),
+                            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.filt.nodup.srt.bam",
+                            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",
+                            "{basedir[0]}/{sample[0]}/{replicate[0]}/qc/filtering.log",
                              logger, logger_mutex )
 def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, logger_mutex):
   raw_bam=os.path.basename(input_file)
@@ -264,10 +265,10 @@ def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, log
   with logger_mutex:
       logger.debug("post_alignment_filter worked")
 
-@transform(post_alignment_filter,formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-]+).fq.sorted.filt.nodup.srt.bam$"),
-           "{basedir}/{sample}/{replicate}/{bam_dir}/{prefix}.sample.tagAlign.gz",
-           "{basedir}/{sample}/{replicate}/{bam_dir}",
-           "{prefix}",
+@transform(post_alignment_filter,formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>.+).fq.sorted.filt.nodup.srt.bam$"),
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.sample.tagAlign.gz",
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",
+           "{prefix[0]}",
            logger, logger_mutex)
 def bam_to_tagAlign(input_file, output_file, out_dir,prefix, logger, logger_mutex):
   FINAL_BAM_FILE=os.path.basename(input_file)
@@ -276,14 +277,14 @@ def bam_to_tagAlign(input_file, output_file, out_dir,prefix, logger, logger_mute
          "# Create tagAlign file \n"
          "# =================== \n"
          "cd $TMPDIR \n"
-         "cp {input_file[0]} . \n"
+         "cp {input_file} . \n"
          "FINAL_TA_FILE={FINAL_BAM_PREFIX}.tagAlign.gz \n"
          "bedtools bamtobed -i {FINAL_BAM_FILE} | awk 'BEGIN{{OFS=\"\\t\"}}{{$4=\"N\";$5=\"1000\";print $0}}' | gzip -nc > \"$FINAL_TA_FILE\" \n"
          "# ================================= \n"
          "# Subsample tagAlign file \n"
          "# ================================ \n"
          "NREADS=15000000 \n"
-         "SUBSAMPLED_TA_FILE={FINAL_BAM_PREFIX}.sample.SE.tagAlign.gz\n"
+         "SUBSAMPLED_TA_FILE={FINAL_BAM_PREFIX}.sample.tagAlign.gz\n"
          "zcat \"$FINAL_TA_FILE\" | grep -v chrM | shuf -n \"$NREADS\" --random-source=\"$FINAL_TA_FILE\" | gzip -nc > \"$SUBSAMPLED_TA_FILE\" \n"
          "mv \"$SUBSAMPLED_TA_FILE\" {out_dir} \n"
          "mv \"$FINAL_TA_FILE\" {out_dir}")
@@ -312,25 +313,26 @@ def bam_to_tagAlign(input_file, output_file, out_dir,prefix, logger, logger_mute
   with logger_mutex:
     logger.debug("bam_to_tagAlign worked")
 
-@transform(bam_to_tagAlign, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-]+).sample.tagAlign.gz$"),
-           "{basedir}/{sample}/{replicate}/{bam_dir}/{sample}.cc.plot.pdf",
-           "{basedir}/{sample}/{replicate}/{bam_dir}",
-           "{sample}.cc.plot.pdf",
-           "{sample}.cc.qc",
+
+
+@transform(bam_to_tagAlign, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<input>[a-zA-Z0-9_\-\.]+)"),
+           "{basedir[0]}/{sample[0]}.pdf",
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",
+           "{sample[0]}.pdf",
+           "{sample[0]}.pbc",
            logger, logger_mutex)
-def phantom_peak_quals(input_file, output_file, out_dir, outfile1,outfile2,logger, logger_mutex):
+def phantom_peak_quals(input_file, output_file,out_dir,outfile1,outfile2,logger, logger_mutex):
   SUBSAMPLED_TA_FILE=os.path.basename(input_file)
-  SUBSAMPLED_TA_FILE=SUBSAMPLED_TA_FILE[:-11] + "sample.tagAlign.gz"
   cmd = ("#########################\n"
          "# run  phantompeakquals #\n"
          "#########################\n"
          "cd $TMPDIR \n"
          "mkdir job_temp \n"
          "cp {out_dir}/{SUBSAMPLED_TA_FILE} . \n"
-         "Rscript ~/applications/phantompeakqualtools/run_spp.R "
-         " -c={SUBSAMPLED_TA_FILE} -filtchr=chrM "
-         " -savp={outfile1} -out={outfile2} "
-         " -tmpdir=./job_temp \n"
+         "Rscript ~/applications/phantompeakqualtools/run_spp.R \\\n"
+         " -c={SUBSAMPLED_TA_FILE} -filtchr=chrM \\\n"
+         " -savp={outfile1} -out={outfile2} \\\n"
+         " -tmpdir=job_temp \n"
          "echo -e \"Filename\\tnumReads\\testFragLen\\tcorr_estFragLen\\tPhantomPeak\\tcorr_phantomPeak\\targmin_corr\\tmin_corr\\tphantomPeakCoef\\trelPhantomPeakCoef\\tQualityTag\" > header \n"
          "sed -r 's/,[^\\t]+//g' {outfile2} > temp \n"
          "cat header temp > temporary && mv temporary temp \n"
@@ -362,9 +364,7 @@ def phantom_peak_quals(input_file, output_file, out_dir, outfile1,outfile2,logge
 
   with logger_mutex:
     logger.debug("create_pseudoreplicates")
-'''
-@transform(bam_to_tagAlign, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<sub_sampled>[a-zA-Z0-9_]+.filt.nodup.sample.SE.tagAlign.gz$)"),
-''' 
+ 
 if __name__ == '__main__':
   cmdline.run (options, multithread = options.jobs)
   drmaa_session.exit()

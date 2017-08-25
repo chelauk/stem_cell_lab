@@ -165,7 +165,7 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
             "-1 {first_reads} \\\n"
             "-2 {second_reads} \\\n"
             "2> {qc_folder}/hisat.log | samtools view -bS - -o temp.bam \n"
-            "samtools sort -n -@ 4 temp.bam -m 2G " + hisat_output[:-4] + " 2>{qc_folder}/samtools.log \\\n"
+            "samtools sort -n -@ 4 temp.bam -m 2G " + hisat_output[:-4] + " 2>{qc_folder}/samtools.log \n"
             "mv {hisat_output} {outpath} \n"
             "mv novel_splice.txt {outpath} \n")
     cmd = cmd.format(**locals())
@@ -267,9 +267,9 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
                             "{basedir[0]}/{sample[0]}/{replicate[0]}/qc/qorts.log",
                              logger, logger_mutex )
 def qorts(input_file, output_file, log_file, logger, logger_mutex):
-    bam=os.path.basename(input_file)
+    bam=os.path.basename(input_file[0])
     cmd = (" cd $TMPDIR; mkdir tmp \n"
-           " cp {input_file} ./ \n"
+           " cp {input_file[0]} ./ \n"
            " samtools sort -n {bam} -m 24G temp \n"
            " java -Xmx24G -Djava.io.tmpdir=./tmp \\\n"
            " -jar ~/applications/QoRTs/QoRTs.jar QC \\\n" 
@@ -277,7 +277,8 @@ def qorts(input_file, output_file, log_file, logger, logger_mutex):
            " --maxReadLength 76 \\\n"
            " --keepMultiMapped \\\n"
            " temp.bam \\\n"
-           " ~/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf output_file " )
+           " ~/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf \\\n"
+           " {output_file} " )
     cmd = cmd.format(**locals())
     #print cmd
     try:
