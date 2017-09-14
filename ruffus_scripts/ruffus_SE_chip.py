@@ -110,10 +110,12 @@ def trim_fastq(input_file, output_files, qc_folder, output_folder ,logger, logge
 #
 #              take trimmer output and align with bowtie2
 #_______________________________________________________________________________________________________
-@collate(trim_fastq, formatter("([^/]+)_trimmed.fq.gz$"),
-                                "{subpath[0][1]}/bam/{1[0]}.fq.sorted.bam",
-                                "{path[0]}","{subpath[0][1]}/bam",
-                                "{subpath[0][1]}/qc",logger,logger_mutex)
+@collate(trim_fastq, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<trimmed_fq_dir>fastq_trimmed)/(?P<prefix>.+).fq.gz"),
+                               "{basedir[0]}/{sample[0]}/{replicate[0]}/bam/{sample[0].fq.sorted.bam",
+                               "{basedir[0]}/{sample[0]}/{replicate[0]}/{trimmed_fq_dir[0]}",
+                               "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",
+                               "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
+                               logger,logger_mutex)
 def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
     reads = []
     for i in input_files:
