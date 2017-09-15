@@ -136,11 +136,11 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
 #              take trimmer output and align with hisat2
 #_______________________________________________________________________________________________________
 @active_if(hisat_check)
-@collate(trim_fastq, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<fastq_trimmed>fastq_trimmed)/(?P<trimmed_fq>[a-zA-Z0-9_\-\.]+$)"),
-                                "{basedir[0]}/{sample[0]}/{replicate[0]}/bam/{sample[0]}.sorted.bam",
-                                "{basedir[0]}/{sample[0]}/{replicate[0]}/{fastq_trimmed[0]}",
-                                "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",
-                                "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",logger,logger_mutex)
+@collate(trim_fastq, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<fastq_trimmed>fastq_trimmed)/(?P<trimmed_fq>[a-zA-Z0-9_\-\.]+)"),
+                               "{basedir[0]}/{sample[0]}/{replicate[0]}/bam/{sample[0]}.{replicate[0]}.sorted.bam",
+                               "{basedir[0]}/{sample[0]}/{replicate[0]}/{fastq_trimmed[0]}",
+                               "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",
+                               "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",logger,logger_mutex)
 def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
     flat_list = [item for sublist in input_files for item in sublist]
     first_reads = []
@@ -169,7 +169,6 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
             "mv {hisat_output} {outpath} \n"
             "mv novel_splice.txt {outpath} \n")
     cmd = cmd.format(**locals())
-    #print cmd
     try:
         stdout_res, stderr_res = "",""
         stdout_res, stderr_res = run_job(cmd,
@@ -255,6 +254,59 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
   
   with logger_mutex:
     logger.debug("star worked")
+
+
+#_______________________________________________________________________________________________________
+################# USING -G flag for cufflinks, no novel Isoforms ######################################
+#_______________________________________________________________________________________________________
+#
+#              cufflinks generate gtf files from sorted hisat/star output
+#_______________________________________________________________________________________________________
+################# USING -G flag for cufflinks, no novel Isoforms ######################################
+@active_if(star_check or hisat_check)
+@transform([hisat2,star],formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<bam_file>[a-zA-Z0-9_\-\.]+$)"),
+                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks/transcripts.gtf",
+                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks",
+                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
+                                   logger,logger_mutex)
+def cufflinks(input_file, output_file, path, qc_path,logger, logger_mutex):
+  bam=os.path.basename(input_file)
+  cmd = ( "cd $TMPDIR \n"
+          "mkdir reference \n"
+          "cp {input_file} . \n"
+          "samtools sort -@ 8 -m 2G {bam} temp \n"
+          "cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  \n"
+          "cp $HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf ./reference \n"
+          "cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference \n"
+          "cufflinks -q -u --no-update-check -p 8 -G ./reference/Hs.GRCh38.84.exon.gtf \\\n"
+          "-b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa \\\n"
+          "--mask-file ./reference/ribosomal_mito_mask.gtf temp.bam  \\\n"
+          "-o  {path}  \\\n"
+          "2>{qc_path}/cufflinks.log \n" )
+  cmd = cmd.format(**locals())
+  #print cmd
+  try:
+    stdout_res, stderr_res = "",""
+    stdout_res, stderr_res = run_job(cmd,
+                                     job_name = "cufflinks",
+                                     job_script_directory = "/home/sejjctj/Scratch/test_dir",
+                                     job_other_options    = "-w n -S /bin/bash -V -l h_rt=04:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
+                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     retain_job_scripts   = True,
+                                     working_directory    = "/home/sejjctj/Scratch",
+                                     drmaa_session        = drmaa_session,
+                                     logger = logger )
+
+  except error_drmaa_job as err:
+    raise Exception("\n".join(map(str,
+                      ["Failed to run:",
+                        cmd,
+                        err,
+                        stdout_res,
+                        stderr_res])))
+
+  with logger_mutex:
+    logger.debug("cufflinks worked")
 
 
 #_______________________________________________________________________________________________________
@@ -350,59 +402,6 @@ def kallisto(input_files, output_file, path,kallisto_folder,qc_folder):
     with logger_mutex:
       logger.debug("kallisto worked")
 
-
-
-#_______________________________________________________________________________________________________
-################# USING -G flag for cufflinks, no novel Isoforms ######################################
-#_______________________________________________________________________________________________________
-#
-#              cufflinks generate gtf files from sorted hisat/star output
-#_______________________________________________________________________________________________________
-################# USING -G flag for cufflinks, no novel Isoforms ######################################
-@active_if(star_check or hisat_check)
-@transform([hisat2,star],formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<bam_file>[a-zA-Z0-9_\-\.]+$)"),
-                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks/transcripts.gtf",
-                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks",
-                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
-                                   logger,logger_mutex)
-def cufflinks(input_file, output_file, path, qc_path,logger, logger_mutex):
-  bam=os.path.basename(input_file)
-  cmd = ( "cd $TMPDIR \n"
-          "mkdir reference \n"
-          "cp {input_file} . \n"
-          "samtools sort -@ 8 -m 2G {bam} temp \n"
-          "cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  \n"
-          "cp $HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf ./reference \n"
-          "cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference \n"
-          "cufflinks -q -u --no-update-check -p 8 -G ./reference/Hs.GRCh38.84.exon.gtf \\\n"
-          "-b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa \\\n"
-          "--mask-file ./reference/ribosomal_mito_mask.gtf temp.bam  \\\n"
-          "-o  {path}  \\\n"
-          "2>{qc_path}/cufflinks.log \n" )
-  cmd = cmd.format(**locals())
-  #print cmd
-  try:
-    stdout_res, stderr_res = "",""
-    stdout_res, stderr_res = run_job(cmd,
-                                     job_name = "cufflinks",
-                                     job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                     job_other_options    = "-w n -S /bin/bash -V -l h_rt=04:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
-                                     retain_job_scripts   = True,
-                                     working_directory    = "/home/sejjctj/Scratch",
-                                     drmaa_session        = drmaa_session,
-                                     logger = logger )
-
-  except error_drmaa_job as err:
-    raise Exception("\n".join(map(str,
-                      ["Failed to run:",
-                        cmd,
-                        err,
-                        stdout_res,
-                        stderr_res])))
-
-  with logger_mutex:
-    logger.debug("cufflinks worked")
 
 
 

@@ -111,12 +111,13 @@ def trim_fastq(input_file, output_files, qc_folder, output_folder ,logger, logge
 #              take trimmer output and align with bowtie2
 #_______________________________________________________________________________________________________
 @collate(trim_fastq, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<trimmed_fq_dir>fastq_trimmed)/(?P<prefix>.+).fq.gz"),
-                               "{basedir[0]}/{sample[0]}/{replicate[0]}/bam/{sample[0].fq.sorted.bam",
+                               "{basedir[0]}/{sample[0]}/{replicate[0]}/bam/{sample[0]}.fq.sorted.bam",
                                "{basedir[0]}/{sample[0]}/{replicate[0]}/{trimmed_fq_dir[0]}",
                                "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",
                                "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
                                logger,logger_mutex)
 def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
+    print out_file
     reads = []
     for i in input_files:
       reads.append(os.path.basename(i))
@@ -175,12 +176,15 @@ def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex)
 
 #_______________________________________________________________________________________________________
 
-@transform(bowtie2,formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>.+).bam$"),
-                            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.filt.nodup.srt.bam",
+
+                               #"{basedir[0]}/{sample[0]}/{replicate[0]}/bam/{sample[0]}.fq.sorted.bam",
+@transform(bowtie2,formatter("(?P<basedir>[/].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>.+).fq.sorted.bam"),
+                            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.fq.sorted.filt.nodup.srt.bam",
                             "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",
                             "{basedir[0]}/{sample[0]}/{replicate[0]}/qc/filtering.log",
                              logger, logger_mutex )
 def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, logger_mutex):
+  print input_file
   raw_bam=os.path.basename(input_file)
   prefix=raw_bam[:-4]
   FILT_BAM_PREFIX=prefix + ".filt.srt"
@@ -267,7 +271,7 @@ def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, log
   with logger_mutex:
       logger.debug("post_alignment_filter worked")
 
-@transform(post_alignment_filter,formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>.+).fq.sorted.filt.nodup.srt.bam$"),
+@transform(post_alignment_filter,formatter("(?P<basedir>[/].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>.+).fq.sorted.filt.nodup.srt.bam"),
            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.sample.tagAlign.gz",
            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",
            "{prefix[0]}",
