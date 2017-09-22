@@ -165,7 +165,7 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
             "-1 {first_reads} \\\n"
             "-2 {second_reads} \\\n"
             "2> {qc_folder}/hisat.log | samtools view -bS - -o temp.bam \n"
-            "samtools sort -n -@ 4 temp.bam -m 2G " + hisat_output[:-4] + " 2>{qc_folder}/samtools.log \n"
+            "samtools sort -n -@ 8 temp.bam -m 4G " + hisat_output[:-4] + " 2>{qc_folder}/samtools.log \n"
             "mv {hisat_output} {outpath} \n"
             "mv novel_splice.txt {outpath} \n")
     cmd = cmd.format(**locals())
@@ -174,7 +174,7 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
         stdout_res, stderr_res = run_job(cmd,
                                         job_name = "hisat",
                                         job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                        job_other_options    = "-w n -S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=2G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
+                                        job_other_options    = "-w n -S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
                                         job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                         retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                         working_directory    = "/home/sejjctj/Scratch",
@@ -338,7 +338,7 @@ def qorts(input_file, output_file, log_file, logger, logger_mutex):
       stdout_res, stderr_res = run_job(cmd,
                                      job_name = "qorts",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                     job_other_options    = "-w n -S /bin/bash -V -l h_rt=05:00:00 -w n -l mem=24G -l tmpfs=30G -wd /home/sejjctj/Scratch -j yes ",
+                                     job_other_options    = "-w n -S /bin/bash -V -l h_rt=06:00:00 -w n -l mem=24G -l tmpfs=30G -wd /home/sejjctj/Scratch -j yes ",
                                      job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch",
