@@ -322,15 +322,14 @@ def qorts(input_file, output_file, log_file, logger, logger_mutex):
     bam=os.path.basename(input_file[0])
     cmd = (" cd $TMPDIR; mkdir tmp \n"
            " cp {input_file[0]} ./ \n"
-           " samtools sort -n {bam} -m 24G temp \n"
-           " java -Xmx24G -Djava.io.tmpdir=./tmp \\\n"
+           " java -Xmx48G -Djava.io.tmpdir=./tmp \\\n"
            " -jar ~/applications/QoRTs/QoRTs.jar QC \\\n" 
            " --minMAPQ 60 \\\n"
-           " --maxReadLength 76 \\\n"
-           " --keepMultiMapped \\\n"
-           " temp.bam \\\n"
+           " --maxReadLength 85 \\\n"
+           " {bam} \\\n"
            " ~/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf \\\n"
-           " {output_file} " )
+           " {output_file} \\\n"
+           " 2>{log_file} " )
     cmd = cmd.format(**locals())
     #print cmd
     try:
@@ -338,7 +337,7 @@ def qorts(input_file, output_file, log_file, logger, logger_mutex):
       stdout_res, stderr_res = run_job(cmd,
                                      job_name = "qorts",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                     job_other_options    = "-w n -S /bin/bash -V -l h_rt=06:00:00 -w n -l mem=24G -l tmpfs=30G -wd /home/sejjctj/Scratch -j yes ",
+                                     job_other_options    = "-w n -S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=48G -l tmpfs=30G -wd /home/sejjctj/Scratch -j yes ",
                                      job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch",
