@@ -94,13 +94,17 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
     print "OUTPUT FILES!   " + str(output_files)    
     if len(input_files) !=2:
         raise Exception("One of the reads pairs %s missing" % (input_files,))
-    cmd = (" cd $TMPDIR \n"
-         " cp {input_files[0]} . \n"
-         " cp {input_files[1]} . \n"
-         " trim_galore --fastqc --paired {basenames[0]} {basenames[1]} 2> {qc_folder}/trim_galore.log \n"
-         " mv *val_*.fq.gz  {output_folder} \n"
-         " mv *fastqc*  {qc_folder} \n"
-         " mv *report* {qc_folder}; rm * \n" )
+    cmd = ( " date \n"
+            " echo $HOSTNAME \n"
+            " cd $TMPDIR \n"
+            " cp {input_files[0]} . \n"
+            " cp {input_files[1]} . \n"
+            " date \n"
+            " ls -l \n"
+            " trim_galore --fastqc --paired {basenames[0]} {basenames[1]} &> {qc_folder}/trim_galore.log \n"
+            " mv *val_*.fq.gz  {output_folder} \n"
+            " mv *fastqc*  {qc_folder} \n"
+            " mv *report* {qc_folder}; rm * \n" )
   
     job_name = "trim_fastqc"
   ## formats the cmd input to get the variables in the {}
