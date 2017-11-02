@@ -94,7 +94,8 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
     print "OUTPUT FILES!   " + str(output_files)    
     if len(input_files) !=2:
         raise Exception("One of the reads pairs %s missing" % (input_files,))
-    cmd = ( " date \n"
+    cmd = ( " source ~/.bashrc \n"
+            " date \n"
             " echo $HOSTNAME \n"
             " cd $TMPDIR \n"
             " cp {input_files[0]} . \n"
@@ -116,8 +117,8 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
       stdout_res, stderr_res = run_job(cmd,
                                       job_name,
                                       job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                      job_other_options    = "-w n -S /bin/bash -V -l h_rt=05:00:00 -l mem=4G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes",
-                                      job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                      job_other_options    = "-w n -S /bin/bash -l h_rt=05:00:00 -l mem=4G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes",
+                                      #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                       retain_job_scripts   = True,
                                       working_directory    = "/home/sejjctj/Scratch",
                                       drmaa_session        = drmaa_session,
@@ -159,7 +160,8 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
     hisat_output = out_file.split('/')
     hisat_output = hisat_output[-1]
 
-    cmd = ( "cd $TMPDIR \n"
+    cmd = ( "source ~/.bashrc \n"
+            "cd $TMPDIR \n"
             "mkdir reference \n"
             "cp  {path}/*fq.gz  . \n"
             "cp $HOME/Scratch/reference/grch38_snp_tran/genome* ./reference \n"
@@ -178,8 +180,8 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
         stdout_res, stderr_res = run_job(cmd,
                                         job_name = "hisat",
                                         job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                        job_other_options    = "-w n -S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
-                                        job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                        job_other_options    = "-w n -S /bin/bash -l h_rt=08:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
+                                        #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                         retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                         working_directory    = "/home/sejjctj/Scratch",
                                         drmaa_session        = drmaa_session,
@@ -222,7 +224,8 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
   star_output = out_file.split('/')
   star_output = star_output[-1]
   #print star_output
-  cmd = ( "cd $TMPDIR \n "
+  cmd = ( "source ~/.bashrc \n"
+          "cd $TMPDIR \n "
           "cp {path}/*fq.gz  . \n "
           "~/applications/STAR-2.5.3a/bin/Linux_x86_64/STAR --runThreadN 4 \\\n"
           "--genomeDir ~/Scratch/reference/star_single_cell/index/ \\\n"
@@ -241,8 +244,8 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
     stdout_res, stderr_res = run_job(cmd,
                                      job_name = "star",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                     job_other_options    = "-w n -S /bin/bash -V -l h_rt=02:00:00 -w n -l mem=24G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     job_other_options    = "-w n -S /bin/bash -l h_rt=02:00:00 -w n -l mem=24G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch",
                                      drmaa_session        = drmaa_session,
@@ -275,7 +278,8 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
                                    logger,logger_mutex)
 def cufflinks(input_file, output_file, path, qc_path,logger, logger_mutex):
   bam=os.path.basename(input_file)
-  cmd = ( "cd $TMPDIR \n"
+  cmd = ( "source ~/.bashrc \n"
+          "cd $TMPDIR \n"
           "mkdir reference \n"
           "cp {input_file} . \n"
           "samtools sort -@ 8 -m 2G {bam} temp \n"
@@ -294,8 +298,8 @@ def cufflinks(input_file, output_file, path, qc_path,logger, logger_mutex):
     stdout_res, stderr_res = run_job(cmd,
                                      job_name = "cufflinks",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                     job_other_options    = "-w n -S /bin/bash -V -l h_rt=04:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     job_other_options    = "-w n -S /bin/bash -l h_rt=04:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,
                                      working_directory    = "/home/sejjctj/Scratch",
                                      drmaa_session        = drmaa_session,
@@ -324,12 +328,13 @@ def cufflinks(input_file, output_file, path, qc_path,logger, logger_mutex):
                              logger, logger_mutex )
 def qorts(input_file, output_file, log_file, logger, logger_mutex):
     bam=os.path.basename(input_file[0])
-    cmd = (" cd $TMPDIR; mkdir tmp \n"
+    cmd = (" source ~/.bashrc \n"
+           " cd $TMPDIR; mkdir tmp \n"
            " cp {input_file[0]} ./ \n"
            " java -Xmx48G -Djava.io.tmpdir=./tmp \\\n"
            " -jar ~/applications/QoRTs/QoRTs.jar QC \\\n" 
            " --minMAPQ 60 \\\n"
-           " --maxReadLength 85 \\\n"
+           " --maxReadLength 100 \\\n"
            " {bam} \\\n"
            " ~/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf \\\n"
            " {output_file} \\\n"
@@ -341,8 +346,8 @@ def qorts(input_file, output_file, log_file, logger, logger_mutex):
       stdout_res, stderr_res = run_job(cmd,
                                      job_name = "qorts",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                     job_other_options    = "-w n -S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=48G -l tmpfs=30G -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     job_other_options    = "-w n -S /bin/bash  -l h_rt=08:00:00 -w n -l mem=48G -l tmpfs=30G -wd /home/sejjctj/Scratch -j yes ",
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch",
                                      drmaa_session        = drmaa_session,
@@ -374,7 +379,8 @@ def kallisto(input_files, output_file, path,kallisto_folder,qc_folder):
         list_of_reads.append(os.path.basename(filename))
     list_of_reads = ' '.join(list_of_reads)
 
-    cmd = ("cd $TMPDIR \n"
+    cmd = ("source ~/.bashrc \n"
+           "cd $TMPDIR \n"
            "mkdir reference \n"
            "cp {path}/*fq.gz   . \n"
            "cp $HOME/Scratch/reference/hg38_ver84_transcripts.idx ./reference \n"
@@ -387,8 +393,8 @@ def kallisto(input_files, output_file, path,kallisto_folder,qc_folder):
       stdout_res, stderr_res = run_job(cmd,
                                      job_name             = "kallisto",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                     job_other_options    = "-w n -S /bin/bash -V -l h_rt=04:00:00 -l mem=8G -w n -pe smp 4 -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     job_other_options    = "-w n -S /bin/bash -l h_rt=04:00:00 -l mem=8G -w n -pe smp 4 -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,
                                      working_directory    = "/home/sejjctj/Scratch",
                                      drmaa_session        = drmaa_session,
