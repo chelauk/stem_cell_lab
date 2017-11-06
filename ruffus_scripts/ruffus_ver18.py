@@ -234,8 +234,8 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
           "--outSAMstrandField intronMotif \\\n"
           "--outFilterIntronMotifs RemoveNoncanonical \\\n" ## added for compatibility with
           "--outFileNamePrefix {sample} \\\n"               ## cufflinks
-          "--outSAMtype BAM SortedByCoordinate \\\n"  
-          "cp *bam {outpath} \\\n"
+          "--outSAMtype BAM SortedByCoordinate\n"  
+          "cp *bam {outpath} \n"
           "cp *Log.* {qc_folder} ")
   cmd = cmd.format(**locals())
   print cmd
