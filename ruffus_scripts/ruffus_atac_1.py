@@ -75,13 +75,14 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
     #print input_files
     if len(input_files) !=2:
         raise Exception("One of the reads pairs %s missing" % (input_files,))
-    cmd = (" cd $TMPDIR ; "
-         " cp {input_files[0]} . ;"
-         " cp {input_files[1]} . ;"
-         " trim_galore --fastqc --paired {basenames[0]} {basenames[1]} 2> {qc_folder}/trim_galore.log ; "
-         " mv *val_*.fq.gz  {output_folder} ; "
-         " mv *fastqc*  {qc_folder} ; "
-         " mv *report* {qc_folder}; rm * ; " )
+    cmd = (" source ~/.bashrc \n" 
+         " cd $TMPDIR \n"
+         " cp {input_files[0]} . \n"
+         " cp {input_files[1]} . \n"
+         " trim_galore --fastqc --paired {basenames[0]} {basenames[1]} 2> {qc_folder}/trim_galore.log \n"
+         " mv *val_*.fq.gz  {output_folder} \n"
+         " mv *fastqc*  {qc_folder} \n"
+         " mv *report* {qc_folder}; rm * \n" )
   
     job_name = "trim_fastqc"
   ## formats the cmd input to get the variables in the {}
@@ -94,7 +95,7 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
                                       job_name,
                                       job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                       job_other_options    = "-w n -S /bin/bash -V -l h_rt=05:00:00 -l mem=4G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes",
-                                      job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                      #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                       retain_job_scripts   = True,
                                       working_directory    = "/home/sejjctj/Scratch",
                                       drmaa_session        = drmaa_session,
@@ -140,9 +141,9 @@ def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex)
             " ls -l \n"
             " date \n"
             " cp $HOME/Scratch/reference/grch38/bowtie2/*bt2 ./reference \n "
-            " bowtie2 -k 4 -X2000 --mm --local --threads 8 "
-            " -x  ./reference/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.bowtie_index "
-            " -1 {first_reads} -2 {second_reads} 2> {qc_folder}/hisat.log | samtools view -bS - -o temp.bam \n"
+            " bowtie2 -k 4 -X2000 --mm --local --threads 8 \\\n"
+            " -x  ./reference/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.bowtie_index \\\n"
+            " -1 {first_reads} -2 {second_reads} 2> {qc_folder}/bowtie2.log | samtools view -bS - -o temp.bam \n"
             " samtools sort -n -@ 8 temp.bam -m 2G " + bowtie2_output[:-4] + " 2>{qc_folder}/samtools.log \n"
             " cp " + bowtie2_output + " {outpath} \n"
             " rm -r * \n ")
@@ -154,7 +155,7 @@ def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex)
                                         job_name = "bowtie2",
                                         job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                         job_other_options    = "-w n -S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=2G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
-                                        job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                        #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                         retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                         working_directory    = "/home/sejjctj/Scratch",
                                         drmaa_session        = drmaa_session,
@@ -169,7 +170,7 @@ def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex)
                          stderr_res])))
 
     with logger_mutex:
-        logger.debug("hisat worked")
+        logger.debug("bowtie2 worked")
 
 
 #_______________________________________________________________________________________________________
@@ -233,18 +234,22 @@ def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, log
             " # Only keep properly paired reads \n"
             " # Obtain name sorted BAM file \n"
             " # ================== \n"
+            " source ~/.bashrc \n"
             " cd $TMPDIR \n"
             " cp {input_file} ./ \n"
             " ls -lh \n"
             " date \n"
-            " samtools view -F 524 -f 2 -u {RAW_BAM_FILE} | sambamba sort -n -m 16G -t 4 /dev/stdin -o {TMP_FILT_BAM_FILE} \n"
-            " samtools view -h {TMP_FILT_BAM_FILE} | assign_multimappers.py -k 4 --paired-end | samtools fixmate -r /dev/stdin {TMP_FILT_FIXMATE_BAM_FILE} \n"
+            " samtools view -F 524 -f 2 -u {RAW_BAM_FILE} \\\n"
+            " | sambamba sort -n -m 16G -t 4 /dev/stdin -o {TMP_FILT_BAM_FILE} \n"
+            " samtools view -h {TMP_FILT_BAM_FILE} | assign_multimappers.py -k 4 --paired-end \\\n"
+            " | samtools fixmate -r /dev/stdin {TMP_FILT_FIXMATE_BAM_FILE} \n"
             " ls -lh \n"
             " date \n"
             " # Remove orphan reads (pair was removed) \n"
             " # and read pairs mapping to different chromosomes \n"
             " # obtain position sorted BAM \n"
-            " samtools view -F 1804 -f 2 -u {TMP_FILT_FIXMATE_BAM_FILE} |  sambamba sort -m 16G -t 4 /dev/stdin -o {FILT_BAM_FILE} \n"
+            " samtools view -F 1804 -f 2 -u {TMP_FILT_FIXMATE_BAM_FILE} \\\n"
+            " | sambamba sort -m 16G -t 4 /dev/stdin -o {FILT_BAM_FILE} \n"
             " rm {TMP_FILT_FIXMATE_BAM_FILE} \n"
             " rm {TMP_FILT_BAM_FILE} \n"
             " ls -lh \n"
@@ -276,8 +281,9 @@ def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, log
             " # Obtain unique count statistics \n"
             " sambamba sort -n -m 16G -t 4 {FILT_BAM_FILE} -o {OFPREFIX}.srt.tmp.bam  \n"
             " echo -e '# PBC File output\n# TotalReadPairs\tDistinctReadPairs\tOneReadPair\tTwoReadPairs\tNRF=Distinct/Total\tPBC1=OnePair/Distinct\tPBC2=OnePair/TwoPair' > header \n"
-            " bedtools bamtobed -bedpe -i {OFPREFIX}.srt.tmp.bam | awk 'BEGIN{{OFS=\"\\t\"}}{{print $1,$2,$4,$6,$9,$10}}' | grep -v 'chrM' | sort "
-            " | uniq -c | "
+            " bedtools bamtobed -bedpe -i {OFPREFIX}.srt.tmp.bam \\\n"
+            " | awk 'BEGIN{{OFS=\"\\t\"}}{{print $1,$2,$4,$6,$9,$10}}' | grep -v 'chrM' | sort \\\n"
+            " | uniq -c | \\\n"
             " awk 'BEGIN{{mt=0;m0=0;m1=0;m2=0}}($1==1){{m1=m1+1}} ($1==2){{m2=m2+1}} {{m0=m0+1}}{{t=mt+$1}}END{{printf\"%d\\t%d\\t%d\\t%d\\t%f\\t%f\\t%f\\n\",mt,m0,m1,m2,m0/mt,m1/m0,m1/m2}}' " 
             "  > {PBC_FILE_QC} \n"
             " rm {FILT_BAM_FILE} \n"
@@ -294,7 +300,7 @@ def post_alignment_filter(input_file, output_file, out_dir,log_file, logger, log
                                      job_name = "filter_bam",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                      job_other_options    = "-S /bin/bash -V -l h_rt=10:00:00 -w n -l mem=16G -l tmpfs=60G -pe smp 4 -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch/test_dir",
                                      drmaa_session        = drmaa_session,
@@ -335,11 +341,13 @@ def bam_to_tagAlign(input_file, output_file, out_dir, logger, logger_mutex):
   cmd = ("# =================== \n"
         "# Create tagAlign file \n"
         "# =================== \n"
+        "source ~/.bashrc \n"
         "cd $TMPDIR \n"
         "cp {input_file} . \n"
         "cp {BAM_LOC}/{FINAL_NMSRT_BAM} . \n"
         "# Create virtual SE file containing both read pairs \n"
-        "bedtools bamtobed -i {FINAL_BAM_FILE} | awk 'BEGIN{{OFS=\"\\t\"}}{{$4=\"N\";$5=\"1000\";print $0}}' | gzip -nc > {FINAL_TA_FILE} \n"
+        "bedtools bamtobed -i {FINAL_BAM_FILE} \\\n"
+        " | awk 'BEGIN{{OFS=\"\\t\"}}{{$4=\"N\";$5=\"1000\";print $0}}' | gzip -nc > {FINAL_TA_FILE} \n"
         "# ================ \n"
         "# Create BEDPE file \n"
         "# ================ \n"
@@ -348,7 +356,8 @@ def bam_to_tagAlign(input_file, output_file, out_dir, logger, logger_mutex):
         "# Subsample tagAlign file \n"
         "# Restrict to one read end per pair for CC analysis \n"
         "# ================================ \n"
-        "zcat {FINAL_BEDPE_FILE} | grep -v \"chrM\" | shuf -n {NREADS} --random-source={FINAL_BEDPE_FILE}  | awk 'BEGIN{{OFS=\"\\t\"}}{{print $1,$2,$3,\"N\",\"1000\",$9}}' | gzip -nc > {SUBSAMPLED_TA_FILE} \n"
+        "zcat {FINAL_BEDPE_FILE} | grep -v \"chrM\" | shuf -n {NREADS} --random-source={FINAL_BEDPE_FILE}  \\\n"
+        " | awk 'BEGIN{{OFS=\"\\t\"}}{{print $1,$2,$3,\"N\",\"1000\",$9}}' | gzip -nc > {SUBSAMPLED_TA_FILE} \n"
         "mv {FINAL_TA_FILE} {out_dir} \n"
         "mv {SUBSAMPLED_TA_FILE} {out_dir} \n"
         "mv {FINAL_BEDPE_FILE} {out_dir} ")
@@ -360,7 +369,7 @@ def bam_to_tagAlign(input_file, output_file, out_dir, logger, logger_mutex):
                                      job_name = "bam2tag",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                      job_other_options    = "-S /bin/bash -V -l h_rt=10:00:00 -w n -l mem=24G -l tmpfs=30G -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch/test_dir",
                                      drmaa_session        = drmaa_session,
@@ -389,6 +398,7 @@ def create_pseudoreplicates(input_file, output_file, out_dir, logger, logger_mut
   cmd = ("# ========================\n"
        "# Create pseudoReplicates\n"
        "# =======================\n"
+       "source ~/.bashrc \n"
        "cd $TMPDIR \n"
        "cp {input_file} . \n"
        "# Get total number of read pairs \n"
@@ -412,7 +422,7 @@ def create_pseudoreplicates(input_file, output_file, out_dir, logger, logger_mut
                                      job_name = "create_pseudo",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                      job_other_options    = "-S /bin/bash -V -l h_rt=01:00:00 -w n -l mem=8G -l tmpfs=30G -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch/test_dir",
                                      drmaa_session        = drmaa_session,
@@ -446,6 +456,7 @@ def phantom_peak_quals(input_file, output_file, out_dir, outfile1,outfile2,logge
   cmd = ("#########################\n"
          "# run  phantompeakquals #\n"
          "#########################\n"
+         "source ~/.bashrc \n"
          "cd $TMPDIR \n"
          "mkdir job_temp \n"
          "mv {out_dir}/{SUBSAMPLED_TA_FILE} . \n"
@@ -467,7 +478,7 @@ def phantom_peak_quals(input_file, output_file, out_dir, outfile1,outfile2,logge
                                      job_name = "phantom",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                      job_other_options    = "-S /bin/bash -V -l h_rt=10:00:00 -w n -l mem=24G -l tmpfs=30G -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch/test_dir",
                                      drmaa_session        = drmaa_session,
@@ -491,6 +502,7 @@ def tn5_shift(input_file, output_file, out_dir, logger, logger_mutex):
   cmd = ("#==================================\n"
          "# TN5 shift for atac seq           \n"
          "#==================================\n"
+         "source ~/.bashrc \n"
          "cd $TMPDIR \n"
          "cp {out_dir}/*tagAlign.gz . \n"
          "for tag in *tagAlign.gz \n"
@@ -505,7 +517,7 @@ def tn5_shift(input_file, output_file, out_dir, logger, logger_mutex):
                                      job_name = "tn5_shift",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                      job_other_options    = "-S /bin/bash -V -l h_rt=04:00:00 -w n -l mem=4G -l tmpfs=10G -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch/test_dir",
                                      drmaa_session        = drmaa_session,
@@ -528,6 +540,7 @@ def macs2(input_file, output_file,out_dir, logger, logger_mutex):
   cmd = ("#===================================\n"
          "#  run mac2 2 on tn5 shifted files  \n"
          "#===================================\n"
+         "source ~/.bashrc \n"
          "cd $TMPDIR \n"
          "cp {out_dir}/*tn5.tagAlign.gz . \n"
          "for tag in *tagAlign.gz \n"
@@ -547,7 +560,8 @@ def macs2(input_file, output_file,out_dir, logger, logger_mutex):
          "-t ""$tag"" -f BED -n ""$prefix"" -g 2700000000 -p $pval_thresh \\\n"
          "--nomodel --shift -100 --extsize 200 -B --SPMR --keep-dup all --call-summits \n"
          "# Sort by Col8 in descending order and replace long peak names in Column 4 with Peak_<peakRank> \n"
-         "sort -k 8gr,8gr \"$prefix\"_peaks.narrowPeak | awk 'BEGIN{{OFS=\"\\t\"}}{{$4=""Peak_""NR ; print $0}}' | gzip -nc > ""$peakfile"" \n"
+         "sort -k 8gr,8gr \"$prefix\"_peaks.narrowPeak | awk 'BEGIN{{OFS=\"\\t\"}}{{$4=""Peak_""NR ; print $0}}' \\\n"
+         " | gzip -nc > ""$peakfile"" \n"
          "rm -f \"$prefix\"_peaks.narrowPeak \n"
          "rm -f \"$prefix\"_peaks.xls \n"
          "rm -f \"$prefix\"_summits.bed \n"
@@ -580,7 +594,7 @@ def macs2(input_file, output_file,out_dir, logger, logger_mutex):
                                      job_name = "macs2",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                      job_other_options    = "-S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=16G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch/test_dir",
                                      drmaa_session        = drmaa_session,
@@ -604,6 +618,7 @@ def blacklist(input_file, output_file,out_dir, logger, logger_mutex):
   cmd = ("#===================================\n"
          "#  run mac2 2 on tn5 shifted files  \n"
          "#===================================\n"
+         "source ~/.bashrc \n"
          "cd $TMPDIR \n"
          "cp {out_dir}/*narrowPeak.gz . \n"
          "blacklist=\"/home/sejjctj/Scratch/reference/grch38/chipseq_blacklist/hg38.blacklist.bed.gz\" \n"
@@ -624,7 +639,7 @@ def blacklist(input_file, output_file,out_dir, logger, logger_mutex):
                                      job_name = "blacklist",
                                      job_script_directory = "/home/sejjctj/Scratch/test_dir",
                                      job_other_options    = "-S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=16G -l tmpfs=60G -wd /home/sejjctj/Scratch -j yes ",
-                                     job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                      retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                      working_directory    = "/home/sejjctj/Scratch/test_dir",
                                      drmaa_session        = drmaa_session,
