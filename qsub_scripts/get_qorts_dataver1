@@ -1,0 +1,27 @@
+samples=$1
+replicates=$2
+aligner=$3
+
+if [ "$aligner" == "star" ]
+  then
+    echo -e "Sample.ID\tLane.ID\tunique.ID\tqc.data.dir\tgroup.ID\tinput.read.pair.count\tmultimapped.read.pair.count"
+    while read i
+      do for j in $(seq 1 "$replicates")
+      do echo -e "$i\tUNKNOWN\t$i\t$i/replicate_$j/qc/QC.summary.txt\tUNKNOWN\t$(sed -n 6p $i/replicate_$j/qc/*Log.final.out \
+      | awk -F "\t" '{print $2}')\t$(sed -n 24p $i/replicate_$j/qc/*Log.final.out \
+      | awk -F "\t" '{print $2}')"
+   done
+  done<"$samples"
+fi
+
+if [ "$aligner" == "hisat" ]
+  then
+    echo -e "Sample.ID\tLane.ID\tunique.ID\tqc.data.dir\tgroup.ID\tinput.read.pair.count\tmultimapped.read.pair.count"
+    while read i
+      do for j in $(seq 1 "$replicates")
+      do echo -e "$i\tUNKNOWN\t$i\t$i/replicate_$j/qc/QC.summary.txt\tUNKNOWN\t$(sed -n 2p $i/replicate_$j/qc/hisat.log \
+      | awk '{print $1}')\t$(sed -n 5p $i/replicate_$j/qc/hisat.log \
+      | awk '{print $1}')"
+    done
+  done<"$samples"
+fi
