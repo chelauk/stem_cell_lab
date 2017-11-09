@@ -1,5 +1,5 @@
 #Specify the input file
-text=$1
+XLS=$1
 #Specify the gene ID column
 ID=$2
 #Specify the fold change value column
