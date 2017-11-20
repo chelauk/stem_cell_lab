@@ -58,7 +58,7 @@ with open(files_list, 'r') as f:
 input_files = [item for sublist in input_files for item in sublist]  
 
 # for @mkdir 
-my_dirs
+my_dirs = []
 with open(files_list, 'r') as f:
     content = [line.decode('utf-8').rstrip('\n') for line in f] 
     for line in content:
