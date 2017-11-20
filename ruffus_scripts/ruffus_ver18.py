@@ -53,12 +53,25 @@ with open(files_list, 'r') as f:
         input_files.append(glob.glob(basedir + line + "/replicate*/fastq_raw/*gz"))  
 #                                                                                .
 #   Useful code to turn input files into a flat list                             .
-#                                                                                .
+#     
+
 input_files = [item for sublist in input_files for item in sublist]  
-print input_files
+
+# for @mkdir 
+my_dirs
+with open(files_list, 'r') as f:
+    content = [line.decode('utf-8').rstrip('\n') for line in f] 
+    for line in content:
+        #print(line)
+        line = line.rstrip()
+        #print(basedir + line)
+        my_dirs.append(glob.glob(basedir + line))  
+
 # start drmaa_session
 drmaa_session = drmaa.Session()
 drmaa_session.initialize()
+
+
 
 #   <<<----  pipelined functions go here
 #_________________________________________________________________________________
@@ -66,10 +79,10 @@ drmaa_session.initialize()
 #   The first step trims pairs of fastqs and generates fastqc reports            .
 #_________________________________________________________________________________
 
-#@mkdir(input_files,
-@mkdir(input_files,
+
+@mkdir(my_dirs,
        #match input pattern
-        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<fastq_dir>fastq_raw)/(?P<fastq_raw>[a-zA-Z0-9_\-\.]+$)"),
+        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)"),
         # make qc directory
         ["{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
         # make trimmed_directory)
@@ -80,6 +93,7 @@ drmaa_session.initialize()
         "{basedir[0]}/cuffmerge_out",
         "{basedir[0]}/cuffdiff",
         "{basedir[0]}/{sample[0]}/{replicate[0]}/cuffquant"])
+
 @collate(input_files,
         # input formatter to provide read pairs
         formatter("([^/]+)R[12](.+)gz"),
