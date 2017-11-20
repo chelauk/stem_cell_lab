@@ -13,9 +13,6 @@
 #$ -N gsea
 # 6 join output streams
 #$ -j yes
-# 7 export job environment
-
-
 
 wd=$1
 sig=$2
@@ -23,13 +20,14 @@ rankfile=$3
 label=$4
 outdir=$5
 
-cp "$wd"/"$sig" .
-cp "$wd"/"$rankfile" .
-
 
 cd "$TMPDIR" || exit
- 
+cp "$wd"/"$sig" .
+cp "$wd"/"$rankfile" .
+date
+ls -lh 
 mkdir java_temp
+
 java -Djava.io.tmpdir=./java_temp -Xmx24g -cp ~/applications/gsea/gsea-3.0.jar xtools.gsea.GseaPreranked \
 -gmx "$sig" -norm meandiv -nperm 1000 -rnk "$rankfile" -scoring_scheme classic \
 -rpt_label "$label" -create_svgs false -make_sets true -plot_top_x 20 \
