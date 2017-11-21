@@ -49,7 +49,7 @@ with open(files_list, 'r') as f:
         #print(line)
         line = line.rstrip()
         #print(basedir + line)
-        print "input " + str(glob.glob(basedir + line + "/replicate*/fastq_raw/*gz"))
+        # print "input " + str(glob.glob(basedir + line + "/replicate*/fastq_raw/*gz"))
         input_files.append(glob.glob(basedir + line + "/replicate*/fastq_raw/*gz"))  
 #                                                                                .
 #   Useful code to turn input files into a flat list                             .
@@ -60,13 +60,15 @@ input_files = [item for sublist in input_files for item in sublist]
 # for @mkdir 
 my_dirs = []
 with open(files_list, 'r') as f:
-    content = [line.decode('utf-8').rstrip('\n') for line in f] 
-    for line in content:
+    for line in f:
         #print(line)
         line = line.rstrip()
-        #print(basedir + line)
-        my_dirs.append(glob.glob(basedir + line))  
+        print "Dirs: " + str(basedir + line)
+        my_dirs.append(glob.glob(basedir + line + "/replicate*"))  
 
+my_dirs = [item for sublist in my_dirs for item in sublist]
+
+print "Dirs:  " +str(my_dirs)
 # start drmaa_session
 drmaa_session = drmaa.Session()
 drmaa_session.initialize()
@@ -82,7 +84,7 @@ drmaa_session.initialize()
 
 @mkdir(my_dirs,
        #match input pattern
-        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)"),
+        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9]+)"),
         # make qc directory
         ["{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
         # make trimmed_directory)
