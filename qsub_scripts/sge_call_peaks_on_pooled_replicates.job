@@ -1,0 +1,96 @@
+#!/bin/bash -l
+#1. Force bash to be the executing shell
+#$ -S /bin/bash
+#2. Request 8hrs of wallclock time (format hours:minutes:seconds).
+#$ -l h_rt=8:00:00
+#3. Request 24G RAM
+#$ -l mem=24G
+#4. Request 60G of TMPDIR space
+#$ -l tmpfs=60G
+#5. name the job
+#$ -N pool_peak
+#6. join output streams
+#$ -j yes
+#
+#====================================================================#
+# Call peaks on replicates, self-pseudoreplicates, pooled data and   #
+# pooled-pseudoreplicates                                            #
+#====================================================================#
+date
+echo "$JOBID working on $HOSTNAME"
+
+cd "$TMPDIR" || exit
+# INPUTS
+
+rep1_TA=$1
+rep2_TA=$2
+rep1_pseudo_pr1=$3
+rep1_pseudo_pr2=$4
+rep2_pseudo_pr1=$5
+rep2_pseudo_pr2=$6
+dataset_prefix=$7
+wd=$8
+
+cp "$wd"/"$rep1_TA" .
+cp "$wd"/"$rep2_TA" .
+cp "$wd"/"$rep1_pseudo_pr1" .
+cp "$wd"/"$rep1_pseudo_pr2" .
+cp "$wd"/"$rep2_pseudo_pr1" .
+cp "$wd"/"$rep2_pseudo_pr2" .
+
+
+
+# cat the files
+
+cat "$rep1_TA" "$rep2_TA" > "$dataset_prefix"_pooled.tagAlign.gz
+cat "$rep1_pseudo_pr1" "$rep2_pseudo_pr1" > "$dataset_prefix"_pseudo_pr1_pooled.tagAlign.gz
+cat "$rep1_pseudo_pr2" "$rep2_pseudo_pr2" > "$dataset_prefix"_pseudo_pr2_pooled.tagAlign.gz
+
+for tag in *pooled.tagAlign.gz
+do 
+prefix=${tag:0:${#tag}-12}
+peakfile="$prefix".narrowPeak.gz
+fc_bedgraph="$prefix".fc.signal.bedgraph
+fc_bedgraph_srt="$prefix".fc.signal.srt.bedgraph  
+fc_bigwig="$prefix"_sig.fc.signal.bigwig
+pval_bedgraph="$prefix".pval.signal.bedgraph
+pval_bedgraph_srt="$prefix".pval.signal.srt.bedgraph
+pval_bigwig="$prefix"_sig.pval.signal.bigwig
+chrsz="/home/sejjctj/Scratch/reference/grch38/hg38.chrom.sizes"
+
+macs2 callpeak -t "$tag" -n "$prefix" -p 0.01 --nomodel --shift 100 --extsize 200 \
+-B --SPMR --keep-dup all --call-summits
+
+# Sort by Col8 in descending order and replace long peak names in Column 4 with Peak_<peakRank>
+sort -k 8gr,8gr "$prefix"_peaks.narrowPeak | awk 'BEGIN{OFS="\t"}{$4="Peak_"NR ; print $0}' \
+| gzip -nc > "$peakfile"
+cp "$peakfile" "$wd"
+rm -f "$prefix"_peaks.narrowPeak
+rm -f "$prefix"_peaks.xls
+rm -f "$prefix"_summits.bed
+
+macs2 bdgcmp -t "$prefix"_treat_pileup.bdg -c "$prefix"_control_lambda.bdg \
+--o-prefix "$prefix" -m FE
+slopBed -i "$prefix"_FE.bdg -g "$chrsz" -b 0 | bedClip stdin "$chrsz" "$fc_bedgraph"
+rm -f "$prefix"_FE.bdg
+
+sort -k1,1 -k2,2n "$fc_bedgraph" > "$fc_bedgraph_srt"
+bedGraphToBigWig "$fc_bedgraph_srt" "$chrsz" "$fc_bigwig"
+cp "$fc_bigwig" "$wd"
+rm -f "$fc_bedgraph" "$fc_bedgraph_srt"
+
+# sval counts the number of tags per million in the (compressed) BED file
+sval=$(wc -l <(zcat -f "$tag") | awk '{printf "%f", $1/1000000}')
+
+macs2 bdgcmp  -t "$prefix"_treat_pileup.bdg -c "$prefix"_control_lambda.bdg \
+--o-prefix "$prefix" -m ppois -S "${sval}"
+slopBed -i "$prefix"_ppois.bdg -g "$chrsz" -b 0 | bedClip stdin "$chrsz" "$pval_bedgraph"
+rm -f "$prefix"_ppois.bdg
+
+sort -k1,1 -k2,2n "$pval_bedgraph" > "$pval_bedgraph_srt"
+bedGraphToBigWig "$pval_bedgraph_srt" "$chrsz" "$pval_bigwig"
+cp "$pval_bigwig" "$wd"
+rm -f "$pval_bedgraph" "$pval_bedgraph_srt"
+
+rm -f "$prefix"_treat_pileup.bdg "$prefix"_control_lambda.bdg
+done
