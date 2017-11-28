@@ -32,10 +32,10 @@ if not files_list:
 with open(files_list, 'r') as f:
     content = [line.decode('utf-8').rstrip('\n') for line in f] 
     for line in content:
-    #print(line)
+    print(line)
         line = line.rstrip()
-        #print(basedir + line)
-        #print glob.glob(basedir + line + "/replicate*/fastq_raw/*gz")
+        print(basedir + line)
+        print glob.glob(basedir + line + "/replicate*/fastq_raw/*gz")
         input_files.append(glob.glob(basedir + line + "/replicate*/fastq_raw/*gz"))  
 input_files = [item for sublist in input_files for item in sublist]  
 print input_files
