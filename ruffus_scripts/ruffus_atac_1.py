@@ -562,7 +562,8 @@ def macs2(input_file, output_file,out_dir, logger, logger_mutex):
          "rm -f \"$prefix\"_peaks.narrowPeak \n"
          "rm -f \"$prefix\"_peaks.xls \n"
          "rm -f \"$prefix\"_summits.bed \n"
-         "macs2 bdgcmp -t \"$prefix\"_treat_pileup.bdg -c \"$prefix\"_control_lambda.bdg \\\n"
+         '''
+	 "macs2 bdgcmp -t \"$prefix\"_treat_pileup.bdg -c \"$prefix\"_control_lambda.bdg \\\n"
          "--o-prefix ""$prefix"" -m FE \n"
          "slopBed -i \"$prefix\"_FE.bdg -g ""$chrsz"" -b 0 | bedClip stdin ""$chrsz"" ""$fc_bedgraph"" \n"
          "rm -f ""$prefix""_FE.bdg \n"
@@ -582,7 +583,8 @@ def macs2(input_file, output_file,out_dir, logger, logger_mutex):
          "bedGraphToBigWig ""$pval_bedgraph_srt"" ""$chrsz"" ""$pval_bigwig"" \n"
          "rm -f ""$pval_bedgraph"" ""$pval_bedgraph_srt"" \n"
          "rm -f \"$prefix\"_treat_pileup.bdg \"$prefix\"_control_lambda.bdg \n"
-         "mv ./\"$prefix\"* {out_dir} \n"
+         '''
+	 "mv ./\"$prefix\"* {out_dir} \n"
          "done \n")
   cmd = cmd.format(**locals())
   try:
