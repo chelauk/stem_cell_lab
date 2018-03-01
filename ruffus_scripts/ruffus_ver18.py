@@ -440,3 +440,17 @@ def kallisto(input_files, output_file, path,kallisto_folder,qc_folder):
 if __name__ == '__main__':
   cmdline.run (options, multithread = options.jobs)
   drmaa_session.exit()
+  pipeline_printout_graph ("bulk_rna-seq.jpg", "jpg", [trim_fastq,hisat2,star,kallisto,cufflinks,qorts],
+                          no_key_legend=True,
+                          ignore_upstream_of_target=True,
+                          pipeline_name="bulk RNA-seq",
+                          user_colour_scheme = {
+                                                "colour_scheme_index" :2,
+                                                "Bulk RNA-seq"      :{"fontcolor" : '"#FF3232"' },
+                                                "Task to run"       :{"linecolor" : '"#0044A0"' },
+                                                "Final target"      :{"fillcolor" : '"#EFA03B"',
+                                                                       "fontcolor" : "black",
+                                                                       "dashed"    : 0           }
+                                               })
+  pipeline_printout()
+
