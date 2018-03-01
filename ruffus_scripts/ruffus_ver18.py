@@ -16,6 +16,7 @@ parser.add_argument('-i', '--input', metavar="FILE", help = "Fastq files")
 parser.add_argument('--cuffdiff_file', metavar="FILE", help = "cuffdiff comparison instructions")
 parser.add_argument('--basedir', metavar="DIR", help = "base directory")
 parser.add_argument('--aligner', metavar="choice", help = "choice of aligner; enter hisat or star")
+parser.add_argument('--gtf', metavar="choice", help = "choice of gtf; enter all_transcripts, all_coding or ercc")
 parser.add_argument('--kallisto', metavar="choice", help = "use kallisto?")
 
 options = parser.parse_args()
@@ -23,10 +24,16 @@ cuffdiff_file = options.cuffdiff_file
 basedir=options.basedir
 aligner=options.aligner
 kallisto=options.kallisto
-
 hisat_check=aligner=="hisat"
-star_check=aligner=="star"
+all_transcripts_ercc="all_transcripts_ercc"
 kallisto_check=kallisto=="yes"
+
+if gtf=="all_transcripts":
+	gtf="$HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf"
+elif gtf=="all_coding":
+	gtf="$HOME/Scratch/reference/grch38/Hs.GRCh38.84.protein_coding.gtf"
+elif gtf=="ercc":
+	gtf="$HOME/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf"
 
 print hisat_check
 print star_check
@@ -302,7 +309,7 @@ def cufflinks(input_file, output_file, path, qc_path,logger, logger_mutex):
           "cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  \n"
           "cp $HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf ./reference \n"
           "cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference \n"
-          "cufflinks -q -u --no-update-check -p 8 -G ./reference/Hs.GRCh38.84.exon.gtf \\\n"
+          "cufflinks -q -u --no-update-check -p 8 -G {gtf} \\\n"
           "-b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa \\\n"
           "--mask-file ./reference/ribosomal_mito_mask.gtf temp.bam  \\\n"
           "-o  {path}  \\\n"
@@ -352,7 +359,7 @@ def qorts(input_file, output_file, log_file, logger, logger_mutex):
            " --minMAPQ 60 \\\n"
            " --maxReadLength 100 \\\n"
            " {bam} \\\n"
-           " ~/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf \\\n"
+           " {gtf} \\\n"
            " {output_file} \\\n"
            " 2>{log_file} " )
     cmd = cmd.format(**locals())
