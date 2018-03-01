@@ -13,20 +13,28 @@
 #$ -N qorts
 # 6 join output streams
 #$ -j yes
-# 7 export job environment
-#$ -V
 
 wd=$1
 bam=$2
 output=$3
 gtf=$4
-logdir=$5
+
+echo "working on $HOSTNAME"
 
 cd "$TMPDIR" || exit
 mkdir tmp  
+
+echo "command: "
+echo "java -Xmx48G -Djava.io.tmpdir=./tmp  -jar ~/applications/QoRTs/QoRTs.jar QC  \\"
+echo "--keepMultiMapped  --minMAPQ 60  --maxReadLength 90 \\"
+echo "$bam $gtf $output" 
+echo "copying bam file"
+
 cp "$wd"/"$bam"  ./ 
- 
+ls -l
+date
+
 
 java -Xmx48G -Djava.io.tmpdir=./tmp  -jar ~/applications/QoRTs/QoRTs.jar QC  \
 --keepMultiMapped  --minMAPQ 60  --maxReadLength 90 \
-"$bam" "$gtf" "$output"  &>"$logdir"/qorts.log
+"$bam" "$gtf" "$output" 

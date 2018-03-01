@@ -30,5 +30,5 @@ mkdir java_temp
 
 java -Djava.io.tmpdir=./java_temp -Xmx24g -cp ~/applications/gsea/gsea-3.0.jar xtools.gsea.GseaPreranked \
 -gmx "$sig" -norm meandiv -nperm 1000 -rnk "$rankfile" -scoring_scheme classic \
--rpt_label "$label" -create_svgs false -make_sets true -plot_top_x 20 \
--rnd_seed timestamp -set_max 500 -set_min 15 -zip_report false -out "$wd"/"$outdir" -gui false
+-rpt_label "$label" -create_svgs false -make_sets true -plot_top_x 200 \
+-rnd_seed timestamp -set_max 5000 -set_min 15 -zip_report false -out "$wd"/"$outdir" -gui false

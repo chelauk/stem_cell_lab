@@ -151,7 +151,7 @@ def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex)
         stdout_res, stderr_res = run_job(cmd,
                                         job_name = "bowtie2",
                                         job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                        job_other_options    = "-w n -S /bin/bash -V -l h_rt=08:00:00 -w n -l mem=2G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
+                                        job_other_options    = "-w n -S /bin/bash -V -l h_rt=12:00:00 -w n -l mem=2G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
                                         #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                         retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                         working_directory    = "/home/sejjctj/Scratch",
@@ -531,7 +531,7 @@ def tn5_shift(input_file, output_file, out_dir, logger, logger_mutex):
     logger.debug("tn5_shift")
 
 @transform(tn5_shift, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<prefix>[a-zA-Z0-9_\-\.]+).tagAlign.gz$"),
-           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.narrowPeak.gz",
+           "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}/{prefix[0]}.tn5.narrowPeak.gz",
            "{basedir[0]}/{sample[0]}/{replicate[0]}/{bam_dir[0]}",logger, logger_mutex)
 def macs2(input_file, output_file,out_dir, logger, logger_mutex):
   cmd = ("#===================================\n"
@@ -623,8 +623,8 @@ def blacklist(input_file, output_file,out_dir, logger, logger_mutex):
          "blacklist=\"/home/sejjctj/Scratch/reference/grch38/chipseq_blacklist/hg38.blacklist.bed.gz\" \n"
          "for peak in *narrowPeak.gz \n"
          "do \n"
-         "prefix=""${{tag:0:${{#tag}}-14}}""   #remove .narrowPeak.gz \n" 
-         "filtered_peak=""${{prefix}}.narrowPeak.filt.gz \n"
+         "prefix=\"${{tag:0:${{#tag}}-14}}\"   #remove .narrowPeak.gz \n" 
+         "filtered_peak=\"${{prefix}}\".narrowPeak.filt.gz \n"
          "bedtools intersect -v a ${{peak}} -b ${{blacklist}} \\\n"
          "| awk 'BEGIN{{OFS=\"\\t\"}}{{if($5>1000) $5=1000; print $0}}' \\\n"
          "| grep -P 'chr[\dXY]+[\\t]' | gzip -nc > ${{filtered_peak}} \n"
