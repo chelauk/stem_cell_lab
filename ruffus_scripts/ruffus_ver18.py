@@ -18,6 +18,7 @@ parser.add_argument('--basedir', metavar="DIR", help = "base directory")
 parser.add_argument('--aligner', metavar="choice", help = "choice of aligner; enter hisat or star")
 parser.add_argument('--gtf', metavar="choice", help = "choice of gtf; enter all_transcripts, all_coding or ercc")
 parser.add_argument('--kallisto', metavar="choice", help = "use kallisto?")
+parser.add_argument('--species', metavar="choice", help = "species" )
 
 options = parser.parse_args()
 cuffdiff_file = options.cuffdiff_file
@@ -28,17 +29,33 @@ hisat_check=aligner=="hisat"
 star_check=aligner=="star"
 kallisto_check=kallisto=="yes"
 gtf=options.gtf
+species=options.species
 
-if gtf=="all_transcripts":
+## could be done better with a dictionary maybe
+
+if species == "human" and gtf=="all_transcripts" and hisat_check:
 	gtf="$HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf"
-elif gtf=="all_coding":
+	hisat_genome_index="$HOME/Scratch/reference/grch38_snp_tran/"
+        genome="$HOME/Scratch/reference/grch38/"
+	mask="$HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf"
+elif species == "human" and gtf=="all_coding" and hisat_check:
 	gtf="$HOME/Scratch/reference/grch38/Hs.GRCh38.84.protein_coding.gtf"
-elif gtf=="ercc":
+	hisat_genome_index="$HOME/Scratch/reference/grch38_snp_tran/"
+	genome="$HOME/Scratch/reference/grch38/"
+        mask="$HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf"
+elif species == "human" and gtf=="ercc" and star_check:
 	gtf="$HOME/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf"
-
+        genome="$HOME/Scratch/reference/grch38/"
+	mask="$HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf"
+elif species == "mouse" and hisat_check:
+	gtf="$HOME/Scratch/reference/GRcm38/gtf/Mus_musculus.GRCm38.84.gtf"
+	hisat_genome_index="$HOME/Scratch/reference/GRcm38/hisat2/grcm38_snp_tran"
+        genome="$HOME/Scratch/reference/GRcm38/GRcm38/"
+	mask="$HOME/Scratch/reference/GRcm38/gtf/Mus_musculus.GRCm38.84.ribo.mito.mask.gtf"
 print hisat_check
 print star_check
-
+print gtf
+print hisat_genome_index
 print "Basedir: " + basedir
 
 #  standard python logger which can be synchronised across concurrent Ruffus tasks
@@ -169,8 +186,10 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
                                "{basedir[0]}/{sample[0]}/{replicate[0]}/bam/{sample[0]}.{replicate[0]}.sorted.bam",
                                "{basedir[0]}/{sample[0]}/{replicate[0]}/{fastq_trimmed[0]}",
                                "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",
-                               "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",logger,logger_mutex)
-def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
+                               "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
+                               hisat_genome_index,
+                                logger,logger_mutex)
+def hisat2(input_files, out_file, path, outpath,qc_folder,hisat_genome_index,logger, logger_mutex):
     flat_list = [item for sublist in input_files for item in sublist]
     first_reads = []
     second_reads =[]
@@ -183,12 +202,12 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex):
     second_reads = ','.join(second_reads)
     hisat_output = out_file.split('/')
     hisat_output = hisat_output[-1]
-
+    
     cmd = ( "source ~/.bashrc \n"
             "cd $TMPDIR \n"
             "mkdir reference \n"
             "cp  {path}/*fq.gz  . \n"
-            "cp $HOME/Scratch/reference/grch38_snp_tran/genome* ./reference \n"
+            "cp {hisat_genome_index}/genome* ./reference \n"
             "hisat2 -p 8 -x ./reference/genome_snp_tran  --dta-cufflinks \\\n"
             "--novel-splicesite-outfile ./novel_splice.txt \\\n"
             "--novel-splicesite-infile ./novel_splice.txt \\\n"
@@ -299,22 +318,23 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
                                   "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks/transcripts.gtf",
                                   "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks",
                                   "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
-                                   gtf,
+                                   gtf,genome,mask,
                                    logger,logger_mutex)
-def cufflinks(input_file, output_file, path,qc_path,gtf,logger, logger_mutex):
+def cufflinks(input_file, output_file, path,qc_path,gtf,genome,mask,logger, logger_mutex):
   bam=os.path.basename(input_file)
   my_gtf=os.path.basename(gtf)
+  my_mask=os.path.basename(mask)
   cmd = ( "source ~/.bashrc \n"
           "cd $TMPDIR \n"
           "mkdir reference \n"
           "cp {input_file} . \n"
           "samtools sort -@ 8 -m 2G {bam} temp \n"
-          "cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  \n"
+          "cp {genome}/*fa* ./reference  \n"
           "cp {gtf} ./reference \n"
-          "cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference \n"
+          "cp {mask} ./reference \n"
           "cufflinks -q -u --no-update-check -p 8 -G ./reference/{my_gtf} \\\n"
-          "-b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa \\\n"
-          "--mask-file ./reference/ribosomal_mito_mask.gtf temp.bam  \\\n"
+          "-b ./reference/*fa \\\n"
+          "--mask-file ./reference/{my_mask} temp.bam  \\\n"
           "-o  {path}  \\\n"
           "2>{qc_path}/cufflinks.log \n" )
   cmd = cmd.format(**locals())
