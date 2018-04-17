@@ -25,8 +25,9 @@ basedir=options.basedir
 aligner=options.aligner
 kallisto=options.kallisto
 hisat_check=aligner=="hisat"
-all_transcripts_ercc="all_transcripts_ercc"
+star_check=aligner=="star"
 kallisto_check=kallisto=="yes"
+gtf=options.gtf
 
 if gtf=="all_transcripts":
 	gtf="$HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf"
@@ -298,18 +299,20 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
                                   "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks/transcripts.gtf",
                                   "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks",
                                   "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
+                                   gtf,
                                    logger,logger_mutex)
-def cufflinks(input_file, output_file, path, qc_path,logger, logger_mutex):
+def cufflinks(input_file, output_file, path,qc_path,gtf,logger, logger_mutex):
   bam=os.path.basename(input_file)
+  my_gtf=os.path.basename(gtf)
   cmd = ( "source ~/.bashrc \n"
           "cd $TMPDIR \n"
           "mkdir reference \n"
           "cp {input_file} . \n"
           "samtools sort -@ 8 -m 2G {bam} temp \n"
           "cp $HOME/Scratch/reference/grch38/Homo_sapiens.GRCh38.dna.primary_assembly.fa* ./reference  \n"
-          "cp $HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf ./reference \n"
+          "cp {gtf} ./reference \n"
           "cp $HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf ./reference \n"
-          "cufflinks -q -u --no-update-check -p 8 -G {gtf} \\\n"
+          "cufflinks -q -u --no-update-check -p 8 -G ./reference/{my_gtf} \\\n"
           "-b ./reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa \\\n"
           "--mask-file ./reference/ribosomal_mito_mask.gtf temp.bam  \\\n"
           "-o  {path}  \\\n"
@@ -348,8 +351,9 @@ def cufflinks(input_file, output_file, path, qc_path,logger, logger_mutex):
 @collate([hisat2,star],formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<bam_file>[a-zA-Z0-9_\-\.]+$)"),
                             "{basedir[0]}/{sample[0]}/{replicate[0]}/qc/QC.summary.txt", 
                             "{basedir[0]}/{sample[0]}/{replicate[0]}/qc/qorts.log",
+                             gtf,
                              logger, logger_mutex )
-def qorts(input_file, output_file, log_file, logger, logger_mutex):
+def qorts(input_file, output_file, log_file, gtf, logger, logger_mutex):
     bam=os.path.basename(input_file[0])
     cmd = (" source ~/.bashrc \n"
            " cd $TMPDIR; mkdir tmp \n"
