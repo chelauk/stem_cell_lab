@@ -37,11 +37,13 @@ if species == "human" and gtf=="all_transcripts" and hisat_check:
 	gtf="$HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf"
 	hisat_genome_index="$HOME/Scratch/reference/grch38_snp_tran/"
         genome="$HOME/Scratch/reference/grch38/"
+	genome_name="Homo_sapiens.GRCh38.dna.primary_assembly.fa"
 	mask="$HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf"
 elif species == "human" and gtf=="all_coding" and hisat_check:
 	gtf="$HOME/Scratch/reference/grch38/Hs.GRCh38.84.protein_coding.gtf"
 	hisat_genome_index="$HOME/Scratch/reference/grch38_snp_tran/"
 	genome="$HOME/Scratch/reference/grch38/"
+	genome_name="Homo_sapiens.GRCh38.dna.primary_assembly.fa"
         mask="$HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf"
 elif species == "human" and gtf=="ercc" and star_check:
 	gtf="$HOME/Scratch/reference/star_single_cell/Hs.GRCh38.84.exon.ercc.gtf"
@@ -50,12 +52,15 @@ elif species == "human" and gtf=="ercc" and star_check:
 elif species == "mouse" and hisat_check:
 	gtf="$HOME/Scratch/reference/GRcm38/gtf/Mus_musculus.GRCm38.84.gtf"
 	hisat_genome_index="$HOME/Scratch/reference/GRcm38/hisat2/grcm38_snp_tran"
-        genome="$HOME/Scratch/reference/GRcm38/GRcm38/"
+        genome="$HOME/Scratch/reference/GRcm38/GRCm38/Mus_musculus.GRCm38"
+        genome_name="Mus_musculus.GRCm38.dna.primary_assembly.fa"
 	mask="$HOME/Scratch/reference/GRcm38/gtf/Mus_musculus.GRCm38.84.ribo.mito.mask.gtf"
-print hisat_check
+
+if hisat_check:
+   print hisat_check
+   print hisat_genome_index
 print star_check
 print gtf
-print hisat_genome_index
 print "Basedir: " + basedir
 
 #  standard python logger which can be synchronised across concurrent Ruffus tasks
@@ -318,9 +323,9 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
                                   "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks/transcripts.gtf",
                                   "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks",
                                   "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
-                                   gtf,genome,mask,
+                                   gtf,genome,mask,genome_name,
                                    logger,logger_mutex)
-def cufflinks(input_file, output_file, path,qc_path,gtf,genome,mask,logger, logger_mutex):
+def cufflinks(input_file, output_file, path,qc_path,gtf,genome,mask,genome_name,logger, logger_mutex):
   bam=os.path.basename(input_file)
   my_gtf=os.path.basename(gtf)
   my_mask=os.path.basename(mask)
@@ -329,11 +334,11 @@ def cufflinks(input_file, output_file, path,qc_path,gtf,genome,mask,logger, logg
           "mkdir reference \n"
           "cp {input_file} . \n"
           "samtools sort -@ 8 -m 2G {bam} temp \n"
-          "cp {genome}/*fa* ./reference  \n"
+          "cp {genome}*fa* ./reference  \n"
           "cp {gtf} ./reference \n"
           "cp {mask} ./reference \n"
           "cufflinks -q -u --no-update-check -p 8 -G ./reference/{my_gtf} \\\n"
-          "-b ./reference/*fa \\\n"
+          "-b ./reference/{genome_name} \\\n"
           "--mask-file ./reference/{my_mask} temp.bam  \\\n"
           "-o  {path}  \\\n"
           "2>{qc_path}/cufflinks.log \n" )
