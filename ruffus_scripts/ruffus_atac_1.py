@@ -35,7 +35,18 @@ with open(files_list, 'r') as f:
         line = line.rstrip()
         input_files.append(glob.glob(basedir + line + "/replicate*/fastq_raw/*gz"))  
 input_files = [item for sublist in input_files for item in sublist]  
-print input_files
+
+# for @mkdir
+my_dirs = []
+with open(files_list, 'r') as f:
+    for line in f:
+        #print(line)
+        line = line.rstrip()
+        print "Dirs: " + str(basedir + line)
+        my_dirs.append(glob.glob(basedir + line + "/replicate*"))
+
+my_dirs = [item for sublist in my_dirs for item in sublist]
+
 #start drmaa_session
 from ruffus.drmaa_wrapper import run_job, error_drmaa_job
 import drmaa
@@ -49,14 +60,14 @@ drmaa_session.initialize()
 #_________________________________________________________________________________
 
 #@mkdir(input_files,
-@mkdir(input_files,
+@mkdir(my_dirs,
        #match input pattern
-        formatter("([^/]+)$"),
+        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9]+)"),
         # make qc directory
-        ["{subpath[0][1]}/qc",
+        ["{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
         # make trimmed_directory)
-        "{subpath[0][1]}/fastq_trimmed",
-        "{subpath[0][1]}/bam"])
+        "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed",
+        "{basedir[0]}/{sample[0]}/{replicate[0]}/bam"])
 @collate(input_files,
         # input formatter to provide read pairs
         formatter("([^/]+)R[12](.+)gz"),
@@ -134,16 +145,22 @@ def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex)
 
     cmd = ( " cd $TMPDIR \n"
             " mkdir reference \n"
+            " mkdir temporary \n"
             " cp  {path}"  + "/*fq.gz" + " . \n "
-            " ls -l \n"
+            " ls -l > {qc_folder}/log \n"
             " date \n"
-            " cp $HOME/Scratch/reference/grch38/bowtie2/*bt2 ./reference \n "
+            " cp $HOME/Scratch/reference/grch38/bowtie2/*bt2 ./reference \n"
             " bowtie2 -k 4 -X2000 --mm --local --threads 8 \\\n"
             " -x  ./reference/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.bowtie_index \\\n"
-            " -1 {first_reads} -2 {second_reads} 2> {qc_folder}/bowtie2.log | samtools view -bS - -o temp.bam \n"
-            " samtools sort -n -@ 8 temp.bam -m 2G " + bowtie2_output[:-4] + " 2>{qc_folder}/samtools.log \n"
+            " -1 {first_reads} \\\n"
+            " -2 {second_reads} \\\n"
+            " 2> {qc_folder}/bowtie2.log \\\n"
+            " | samtools view -bS - -o temp.bam 2>{qc_folder}/samtools.log \n"
+            " ls -lh >> {qc_folder}/list.log \n"
+            " ~/applications/sambamba/sambamba_v0.6.6 sort -p -m 4G -t 8 --tmpdir=./temporary temp.bam -o " + bowtie2_output + " \n" 
+            " ls -lh >> {qc_folder}/list.log \n"
             " cp " + bowtie2_output + " {outpath} \n"
-            " rm -r * \n ")
+            " rm -r * ")
     cmd = cmd.format(**locals())
     #print cmd
     try:
@@ -151,7 +168,7 @@ def bowtie2(input_files, out_file, path, outpath,qc_folder,logger, logger_mutex)
         stdout_res, stderr_res = run_job(cmd,
                                         job_name = "bowtie2",
                                         job_script_directory = "/home/sejjctj/Scratch/test_dir",
-                                        job_other_options    = "-w n -S /bin/bash -V -l h_rt=12:00:00 -w n -l mem=2G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
+                                        job_other_options    = "-w n -S /bin/bash -V -l h_rt=12:00:00 -w n -l mem=4G -l tmpfs=80G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
                                         #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
                                         retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
                                         working_directory    = "/home/sejjctj/Scratch",
