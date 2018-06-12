@@ -19,22 +19,31 @@ parser.add_argument('--aligner', metavar="choice", help = "choice of aligner; en
 parser.add_argument('--gtf', metavar="choice", help = "choice of gtf; enter all_transcripts, all_coding or ercc")
 parser.add_argument('--kallisto', metavar="choice", help = "use kallisto?")
 parser.add_argument('--species', metavar="choice", help = "species" )
+parser.add_argument('--stringtie', metavar="choice", help = "use stringtie?")
 
 options = parser.parse_args()
 cuffdiff_file = options.cuffdiff_file
 basedir=options.basedir
 aligner=options.aligner
 kallisto=options.kallisto
+stringtie=options.stringtie
 hisat_check=aligner=="hisat"
 star_check=aligner=="star"
 kallisto_check=kallisto=="yes"
+stringtie_check=stringtie=="yes"
 gtf=options.gtf
 species=options.species
 
 ## could be done better with a dictionary maybe
 
-if species == "human" and gtf=="all_transcripts" and hisat_check:
+if species == "human" and gtf=="all_transcripts" and hisat_check and not stringtie_check:
 	gtf="$HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf"
+	hisat_genome_index="$HOME/Scratch/reference/grch38_snp_tran/"
+        genome="$HOME/Scratch/reference/grch38/"
+	genome_name="Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+	mask="$HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf"
+elif species == "human" and gtf=="all_transcripts" and stringtie_check:
+	gtf="$HOME/Scratch/reference/grch38/gencode.v28.annotation.gtf.gz"
 	hisat_genome_index="$HOME/Scratch/reference/grch38_snp_tran/"
         genome="$HOME/Scratch/reference/grch38/"
 	genome_name="Homo_sapiens.GRCh38.dna.primary_assembly.fa"
@@ -57,9 +66,11 @@ elif species == "mouse" and hisat_check:
 	mask="$HOME/Scratch/reference/GRcm38/gtf/Mus_musculus.GRCm38.84.ribo.mito.mask.gtf"
 
 if hisat_check:
-   print hisat_check
-   print hisat_genome_index
-print star_check
+   print "hisat check: " + str(hisat_check)
+   print str(hisat_genome_index)
+if stringtie_check:
+   print "stringtie check: " + str(stringtie_check)
+print "STAR check: " + str(star_check)
 print gtf
 print "Basedir: " + basedir
 
@@ -122,6 +133,7 @@ drmaa_session.initialize()
         "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",
         "{basedir[0]}/{sample[0]}/{replicate[0]}/kallisto",
         "{basedir[0]}/{sample[0]}/{replicate[0]}/cufflinks",
+        "{basedir[0]}/{sample[0]}/{replicate[0]}/stringtie",
         "{basedir[0]}/cuffmerge_out",
         "{basedir[0]}/cuffdiff",
         "{basedir[0]}/{sample[0]}/{replicate[0]}/cuffquant"])
@@ -366,6 +378,58 @@ def cufflinks(input_file, output_file, path,qc_path,gtf,genome,mask,genome_name,
 
   with logger_mutex:
     logger.debug("cufflinks worked")
+
+
+
+
+#_______________________________________________________________________________________________________
+#
+#         stringtie generates gtf files, abundance files and ctab files from sorted hisat/star output
+#_______________________________________________________________________________________________________
+
+
+@active_if(stringtie_check)
+@transform([hisat2,star],formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<bam_file>[a-zA-Z0-9_\-\.]+$)"),
+                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/stringtie/{sample[0]}.gtf",
+                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/stringtie/{sample[0]}.gene_abund.tab",
+                                  "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
+                                   gtf,logger,logger_mutex)
+def stringtie(input_file, output_file,abundance_file,qc_path,gtf,logger, logger_mutex):
+  bam=os.path.basename(input_file)
+  my_gtf=os.path.basename(gtf)
+  uncompressed_gtf=my_gtf[:-3]
+  cmd = ( "source ~/.bashrc \n"
+          "cd $TMPDIR \n"
+          "mkdir reference \n"
+          "cp {input_file} . \n"
+          "gunzip -c {gtf} > ./reference/gencode.gtf \n"
+          "sed -i s/^chr// ./reference/gencode.gtf \n"
+          "stringtie -p 8 -G ./reference/gencode.gtf -A {abundance_file} -o {output_file} -B -e -v {bam} \\\n"
+          "2>{qc_path}/stringtie.log \n" )
+  cmd = cmd.format(**locals())
+  #print cmd
+  try:
+    stdout_res, stderr_res = "",""
+    stdout_res, stderr_res = run_job(cmd,
+                                     job_name = "stringtie",
+                                     job_script_directory = "/home/sejjctj/Scratch/test_dir",
+                                     job_other_options    = "-w n -S /bin/bash -l h_rt=04:00:00 -w n -l mem=4G -l tmpfs=60G -pe smp 8 -wd /home/sejjctj/Scratch -j yes ",
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     retain_job_scripts   = True,
+                                     working_directory    = "/home/sejjctj/Scratch",
+                                     drmaa_session        = drmaa_session,
+                                     logger = logger )
+
+  except error_drmaa_job as err:
+    raise Exception("\n".join(map(str,
+                      ["Failed to run:",
+                        cmd,
+                        err,
+                        stdout_res,
+                        stderr_res])))
+
+  with logger_mutex:
+    logger.debug("stringtie worked")
 
 
 #_______________________________________________________________________________________________________
