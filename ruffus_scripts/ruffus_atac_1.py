@@ -63,25 +63,24 @@ drmaa_session.initialize()
 @mkdir(my_dirs,
        #match input pattern
         formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9]+)"),
-        # make qc directory
-        ["{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
         # make trimmed_directory)
+        ["{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
         "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed",
         "{basedir[0]}/{sample[0]}/{replicate[0]}/bam"])
 @collate(input_files,
         # input formatter to provide read pairs
-        formatter("([^/]+)R[12](.+)gz"),
+        formatter("([^/]+)R[12]_001(.+)gz"),
         # create output parameter to be supplied to next task
-	["{subpath[0][1]}/fastq_trimmed/{1[0]}R1_001_val_1.fq.gz",
-	 "{subpath[0][1]}/fastq_trimmed/{1[0]}R2_001_val_2.fq.gz"],
-        ["{1[0]}R1_001.fastq.gz","{1[0]}R2_001.fastq.gz"],    # basename for trim_galore
-        "{subpath[0][1]}/qc",               # qc folder
+        ["{subpath[0][1]}/fastq_trimmed/{1[0]}R1_001_val_1.fq.gz",
+         "{subpath[0][1]}/fastq_trimmed/{1[0]}R2_001_val_2.fq.gz"],
+        ["{1[0]}R1_001.fastq.gz","{1[0]}R2_001.fastq.gz"], # basenemae for trim_galore
+        "{subpath[0][1]}/qc",               # qc_folder
         "{subpath[0][1]}/fastq_trimmed",    # trimmed_folder
         logger, logger_mutex)
 def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,logger, logger_mutex):
-    
-    #print input_files
-    if len(input_files) !=2:
+    print "input files: " + str(output_files)
+    print "length:   :" + str(output_files)
+    if len(output_files) !=2:
         raise Exception("One of the reads pairs %s missing" % (input_files,))
     cmd = (" source ~/.bashrc \n" 
          " cd $TMPDIR \n"

@@ -43,7 +43,7 @@ if species == "human" and gtf=="all_transcripts" and hisat_check and not stringt
 	genome_name="Homo_sapiens.GRCh38.dna.primary_assembly.fa"
 	mask="$HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf"
 elif species == "human" and gtf=="all_transcripts" and stringtie_check:
-	gtf="$HOME/Scratch/reference/grch38/gencode.v28.annotation.gtf.gz"
+	gtf="$HOME/Scratch/reference/grch38/gencode.v28.annotation.gtf"
 	hisat_genome_index="$HOME/Scratch/reference/grch38_snp_tran/"
         genome="$HOME/Scratch/reference/grch38/"
 	genome_name="Homo_sapiens.GRCh38.dna.primary_assembly.fa"
@@ -140,13 +140,13 @@ drmaa_session.initialize()
 
 @collate(input_files,
         # input formatter to provide read pairs
-        formatter("([^/]+)R[12](.+)gz"),
+        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9]+)/fastq_raw/(?P<pair>.+)R[12](.+)gz"),
         # create output parameter to be supplied to next task
-	["{subpath[0][1]}/fastq_trimmed/{1[0]}R1_001_val_1.fq.gz",
-	 "{subpath[0][1]}/fastq_trimmed/{1[0]}R2_001_val_2.fq.gz"],
-        ["{1[0]}R1_001.fastq.gz","{1[0]}R2_001.fastq.gz"],    # basename for trim_galore
-        "{subpath[0][1]}/qc",               # qc folder
-        "{subpath[0][1]}/fastq_trimmed",    # trimmed_folder
+	["{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R1_001_val_1.fq.gz",
+	 "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R2_001_val_2.fq.gz"],
+        ["{pair[0]}R1_001.fastq.gz","{pair[0]}R2_001.fastq.gz"],    # basename for trim_galore
+        "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",               # qc folder
+        "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed",    # trimmed_folder
         logger, logger_mutex)
 def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,logger, logger_mutex):
     print "OUTPUT FILES!   " + str(output_files)    
@@ -231,7 +231,7 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,hisat_genome_index,log
             "-1 {first_reads} \\\n"
             "-2 {second_reads} \\\n"
             "2> {qc_folder}/hisat.log | samtools view -bS - -o temp.bam \n"
-            "samtools sort -n -@ 8 temp.bam -m 4G " + hisat_output[:-4] + " 2>{qc_folder}/samtools.log \n"
+            "samtools sort -@ 8 temp.bam -m 4G " + hisat_output[:-4] + " 2>{qc_folder}/samtools.log \n"
             "mv {hisat_output} {outpath} \n"
             "mv novel_splice.txt {outpath} \n")
     cmd = cmd.format(**locals())
@@ -339,19 +339,17 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
                                    logger,logger_mutex)
 def cufflinks(input_file, output_file, path,qc_path,gtf,genome,mask,genome_name,logger, logger_mutex):
   bam=os.path.basename(input_file)
-  my_gtf=os.path.basename(gtf)
   my_mask=os.path.basename(mask)
   cmd = ( "source ~/.bashrc \n"
           "cd $TMPDIR \n"
           "mkdir reference \n"
           "cp {input_file} . \n"
-          "samtools sort -@ 8 -m 2G {bam} temp \n"
           "cp {genome}*fa* ./reference  \n"
-          "cp {gtf} ./reference \n"
+          "cp {gtf} ./reference/gencode.gtf \n"
           "cp {mask} ./reference \n"
-          "cufflinks -q -u --no-update-check -p 8 -G ./reference/{my_gtf} \\\n"
+          "cufflinks -q -u --no-update-check -p 8 -G ./reference/gencode.gtf \\\n"
           "-b ./reference/{genome_name} \\\n"
-          "--mask-file ./reference/{my_mask} temp.bam  \\\n"
+          "--mask-file ./reference/{my_mask} {bam} \\\n"
           "-o  {path}  \\\n"
           "2>{qc_path}/cufflinks.log \n" )
   cmd = cmd.format(**locals())
@@ -396,14 +394,11 @@ def cufflinks(input_file, output_file, path,qc_path,gtf,genome,mask,genome_name,
                                    gtf,logger,logger_mutex)
 def stringtie(input_file, output_file,abundance_file,qc_path,gtf,logger, logger_mutex):
   bam=os.path.basename(input_file)
-  my_gtf=os.path.basename(gtf)
-  uncompressed_gtf=my_gtf[:-3]
   cmd = ( "source ~/.bashrc \n"
           "cd $TMPDIR \n"
           "mkdir reference \n"
           "cp {input_file} . \n"
-          "gunzip -c {gtf} > ./reference/gencode.gtf \n"
-          "sed -i s/^chr// ./reference/gencode.gtf \n"
+          "cp {gtf} ./reference/gencode.gtf \n"
           "stringtie -p 8 -G ./reference/gencode.gtf -A {abundance_file} -o {output_file} -B -e -v {bam} \\\n"
           "2>{qc_path}/stringtie.log \n" )
   cmd = cmd.format(**locals())
@@ -447,11 +442,13 @@ def qorts(input_file, output_file, log_file, gtf, logger, logger_mutex):
     cmd = (" source ~/.bashrc \n"
            " cd $TMPDIR; mkdir tmp \n"
            " cp {input_file[0]} ./ \n"
+           " samtools sort -n -m 12G -T prefix -O bam {bam} > namesort.bam \n"
            " java -Xmx48G -Djava.io.tmpdir=./tmp \\\n"
            " -jar ~/applications/QoRTs/QoRTs.jar QC \\\n" 
+           " --nameSorted \\\n"
            " --minMAPQ 60 \\\n"
            " --maxReadLength 100 \\\n"
-           " {bam} \\\n"
+           " namesort.bam \\\n"
            " {gtf} \\\n"
            " {output_file} \\\n"
            " 2>{log_file} " )
@@ -479,7 +476,6 @@ def qorts(input_file, output_file, log_file, gtf, logger, logger_mutex):
 
     with logger_mutex:
       logger.debug("qorts worked")
-
 
 
 @active_if(kallisto_check)

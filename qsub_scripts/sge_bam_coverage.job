@@ -1,0 +1,39 @@
+## invoke bash as a login shell, should solve module problem
+#!/bin/bash -l
+## force bash as the executing shell
+#$ -S /bin/bash
+## request 2 hours
+#$ -l h_rt=02:00:00
+## request 16G
+#$ -l mem=8G
+## number of processors
+#$ -pe smp 4 
+## Name of job
+#$ -N bamCov
+## Request 10G tmpdir
+#$ -l tmpfs=10G
+## join output streams
+#$ -j y
+## work MUST be done in $TMDDIR
+
+cd $TMPDIR || exit
+echo "working in $HOSTNAME"
+wd=$1
+bam=$2
+
+
+module use --append ~/privatemodules/
+module load deeptools/v3.0.2 
+
+cp "$wd"/"$bam" .
+cp "$wd"/"$bam".bai .
+
+bamCoverage --normalizeUsing CPM --ignoreForNormalization chrM chrX  -b "$bam" -o "${bam:0:${#bam}-3}".bw
+
+echo "done"
+
+date
+
+ls -l
+
+mv "${bam:0:${#bam}-3}".bw "$wd"
