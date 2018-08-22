@@ -151,12 +151,12 @@ drmaa_session.initialize()
 
 @collate(input_files,
         # input formatter to provide read pairs
-        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9]+)/fastq_raw/(?P<pair>.+)R[12](.*)gz"),
+        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9]+)/fastq_raw/(?P<pair>.+)R[12](?P<fill>.*).fastq.gz"),
         # create output parameter to be supplied to next task
 	#["{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R1_001_val_1.fq.gz",
 	# "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R2_001_val_2.fq.gz"],
-	["{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R1*val_1.fq.gz",
-	 "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R2*val_2.fq.gz"],
+	["{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R1{fill[0]}_val_1.fq.gz",
+	 "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R2{fill[0]}_val_2.fq.gz"],
         #["{pair[0]}R1_001.fastq.gz","{pair[0]}R2_001.fastq.gz"],    # basename for trim_galore
         "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",               # qc folder
         "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed",    # trimmed_folder
