@@ -17,6 +17,7 @@ parser.add_argument('--cuffdiff_file', metavar="FILE", help = "cuffdiff comparis
 parser.add_argument('--basedir', metavar="DIR", help = "base directory")
 parser.add_argument('--aligner', metavar="choice", help = "choice of aligner; enter hisat or star")
 parser.add_argument('--gtf', metavar="choice", help = "choice of gtf; enter all_transcripts, all_coding or ercc")
+#parser.add_argument('--flat_gff', metavar="choice", help = "flat gff for DEXseq")
 parser.add_argument('--kallisto', metavar="choice", help = "use kallisto?")
 parser.add_argument('--species', metavar="choice", help = "species" )
 parser.add_argument('--stringtie', metavar="choice", help = "use stringtie?")
@@ -31,18 +32,28 @@ hisat_check=aligner=="hisat"
 star_check=aligner=="star"
 kallisto_check=kallisto=="yes"
 stringtie_check=stringtie=="yes"
+#flat_gff=options.flat_gff
 gtf=options.gtf
 species=options.species
 
 ## could be done better with a dictionary maybe
 
-if species == "human" and gtf=="all_transcripts" and hisat_check and not stringtie_check:
-	gtf="$HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf"
+if species == "human" and gtf=="exon" and hisat_check and not stringtie_check:
+	flat_gff="$HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.flattened.gff"
+        gtf="$HOME/Scratch/reference/grch38/Hs.GRCh38.84.exon.gtf"
 	hisat_genome_index="$HOME/Scratch/reference/grch38_snp_tran/"
         genome="$HOME/Scratch/reference/grch38/"
 	genome_name="Homo_sapiens.GRCh38.dna.primary_assembly.fa"
 	mask="$HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf"
 elif species == "human" and gtf=="all_transcripts" and stringtie_check:
+        flat_gff="$HOME/Scratch/reference/grch38/gencode.flattened.gff"
+	gtf="$HOME/Scratch/reference/grch38/gencode.v28.annotation.gtf"
+	hisat_genome_index="$HOME/Scratch/reference/grch38_snp_tran/"
+        genome="$HOME/Scratch/reference/grch38/"
+	genome_name="Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+	mask="$HOME/Scratch/reference/grch38/ribosomal_mito_mask.gtf"
+elif species == "human" and gtf=="all_transcripts" and not stringtie_check:
+        flat_gff="$HOME/Scratch/reference/grch38/gencode.flattened.gff"
 	gtf="$HOME/Scratch/reference/grch38/gencode.v28.annotation.gtf"
 	hisat_genome_index="$HOME/Scratch/reference/grch38_snp_tran/"
         genome="$HOME/Scratch/reference/grch38/"
@@ -67,7 +78,7 @@ elif species == "mouse" and hisat_check:
 
 if hisat_check:
    print "hisat check: " + str(hisat_check)
-   print str(hisat_genome_index)
+   print(str(hisat_genome_index))
 if stringtie_check:
    print "stringtie check: " + str(stringtie_check)
 print "STAR check: " + str(star_check)
@@ -140,15 +151,18 @@ drmaa_session.initialize()
 
 @collate(input_files,
         # input formatter to provide read pairs
-        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9]+)/fastq_raw/(?P<pair>.+)R[12](.+)gz"),
+        formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9]+)/fastq_raw/(?P<pair>.+)R[12](.*)gz"),
         # create output parameter to be supplied to next task
-	["{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R1_001_val_1.fq.gz",
-	 "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R2_001_val_2.fq.gz"],
-        ["{pair[0]}R1_001.fastq.gz","{pair[0]}R2_001.fastq.gz"],    # basename for trim_galore
+	#["{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R1_001_val_1.fq.gz",
+	# "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R2_001_val_2.fq.gz"],
+	["{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R1*val_1.fq.gz",
+	 "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed/{pair[0]}R2*val_2.fq.gz"],
+        #["{pair[0]}R1_001.fastq.gz","{pair[0]}R2_001.fastq.gz"],    # basename for trim_galore
         "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",               # qc folder
         "{basedir[0]}/{sample[0]}/{replicate[0]}/fastq_trimmed",    # trimmed_folder
         logger, logger_mutex)
-def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,logger, logger_mutex):
+#def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,logger, logger_mutex):
+def trim_fastq(input_files, output_files, qc_folder, output_folder ,logger, logger_mutex):
     print "OUTPUT FILES!   " + str(output_files)    
     if len(input_files) !=2:
         raise Exception("One of the reads pairs %s missing" % (input_files,))
@@ -158,10 +172,13 @@ def trim_fastq(input_files, output_files, basenames, qc_folder, output_folder ,l
             " cd $TMPDIR \n"
             " cp {input_files[0]} . \n"
             " cp {input_files[1]} . \n"
+            " basename1=$(basename {input_files[0]}) \n"
+            " basename2=$(basename {input_files[1]}) \n"
             " date \n"
             " ls -l \n"
-            " trim_galore --fastqc --paired {basenames[0]} {basenames[1]} &> {qc_folder}/trim_galore.log \n"
-            " mv *val_*.fq.gz  {output_folder} \n"
+            #" trim_galore --fastqc --paired {basenames[0]} {basenames[1]} &> {qc_folder}/trim_galore.log \n"
+            " trim_galore --fastqc --paired $basename1 $basename2 &> {qc_folder}/trim_galore.log \n"
+            " mv *.fq.gz  {output_folder} \n"
             " mv *fastqc*  {qc_folder} \n"
             " mv *report* {qc_folder}; rm * \n" )
   

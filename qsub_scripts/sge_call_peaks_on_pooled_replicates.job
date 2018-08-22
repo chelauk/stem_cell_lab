@@ -24,27 +24,41 @@ cd "$TMPDIR" || exit
 
 rep1_TA=$1
 rep2_TA=$2
-rep1_pseudo_pr1=$3
-rep1_pseudo_pr2=$4
-rep2_pseudo_pr1=$5
-rep2_pseudo_pr2=$6
-dataset_prefix=$7
-wd=$8
+rep3_TA=$3
+rep1_pseudo_pr1=$4
+rep1_pseudo_pr2=$5
+rep2_pseudo_pr1=$6
+rep2_pseudo_pr2=$7
+rep3_pseudo_pr1=$8
+rep3_pseudo_pr2=$9
+dataset_prefix=${10}
+wd=${11}
 
 cp "$wd"/"$rep1_TA" .
 cp "$wd"/"$rep2_TA" .
+cp "$wd"/"$rep3_TA" .
 cp "$wd"/"$rep1_pseudo_pr1" .
 cp "$wd"/"$rep1_pseudo_pr2" .
 cp "$wd"/"$rep2_pseudo_pr1" .
 cp "$wd"/"$rep2_pseudo_pr2" .
+cp "$wd"/"$rep3_pseudo_pr1" .
+cp "$wd"/"$rep3_pseudo_pr2" .
 
-
+rep1_TA=$(basename "$rep1_TA")
+rep2_TA=$(basename "$rep2_TA")
+rep3_TA=$(basename "$rep3_TA")
+rep1_pseudo_pr1=$(basename "$rep1_pseudo_pr1")
+rep1_pseudo_pr2=$(basename "$rep1_pseudo_pr2")
+rep2_pseudo_pr1=$(basename "$rep2_pseudo_pr1")
+rep2_pseudo_pr2=$(basename "$rep2_pseudo_pr2")
+rep3_pseudo_pr1=$(basename "$rep3_pseudo_pr1")
+rep3_pseudo_pr2=$(basename "$rep3_pseudo_pr2")
 
 # cat the files
 
-cat "$rep1_TA" "$rep2_TA" > "$dataset_prefix"_pooled.tagAlign.gz
-cat "$rep1_pseudo_pr1" "$rep2_pseudo_pr1" > "$dataset_prefix"_pseudo_pr1_pooled.tagAlign.gz
-cat "$rep1_pseudo_pr2" "$rep2_pseudo_pr2" > "$dataset_prefix"_pseudo_pr2_pooled.tagAlign.gz
+cat "$rep1_TA" "$rep2_TA" "$rep2_TA" > "$dataset_prefix"_pooled.tagAlign.gz
+cat "$rep1_pseudo_pr1" "$rep2_pseudo_pr1" "$rep3_pseudo_pr1" > "$dataset_prefix"_pseudo_pr1_pooled.tagAlign.gz
+cat "$rep1_pseudo_pr2" "$rep2_pseudo_pr2" "$rep3_pseudo_pr2" > "$dataset_prefix"_pseudo_pr2_pooled.tagAlign.gz
 
 for tag in *pooled.tagAlign.gz
 do 
