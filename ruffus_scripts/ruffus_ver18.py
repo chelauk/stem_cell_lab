@@ -279,12 +279,12 @@ def hisat2(input_files, out_file, path, outpath,qc_folder,hisat_genome_index,log
 #              take trimmer output and align with star
 #_______________________________________________________________________________________________________
 @active_if(star_check)
-@collate(trim_fastq, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<trimmed_dir>fastq_trimmed)/(?P<fastq>[a-zA-Z0-9_\-\.]+$)"),
-                              "{basedir[0]}/{sample[0]}/{replicate[0]}/bam/{sample[0]}.Aligned.sortedByCoord.out.bam",
-                              "{basedir[0]}/{sample[0]}/{replicate[0]}/{trimmed_dir[0]}",
-                              "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",
-		              "{sample[0]}",
-                              "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
+@collate(trim_fastq, formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z1-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<trimmed_dir>fastq_trimmed)/(?P<fastq>[a-zA-Z0-9_\-\.]+$)"),
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/bam/{sample[0]}.Aligned.sortedByCoord.out.bam", #out_file  ~1
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/{trimmed_dir[0]}",                               #path      ~2
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",                                            #outpath   ~3
+		              "{sample[0]}.",                                                                            #sample    ~4
+                              "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",                                             #qc_folder ~5 
                                logger, logger_mutex)
 def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mutex):
   flat_list = [item for sublist in input_files for item in sublist]
@@ -304,14 +304,24 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
   cmd = ( "source ~/.bashrc \n"
           "cd $TMPDIR \n "
           "cp {path}/*fq.gz  . \n "
-          "~/applications/STAR-2.5.3a/bin/Linux_x86_64/STAR --runThreadN 4 \\\n"
+          "STAR --runThreadN 4 \\\n"
           "--genomeDir ~/Scratch/reference/star_single_cell/index/ \\\n"
           "--readFilesIn " + first_reads + " " + second_reads + " \\\n"
           "--readFilesCommand zcat \\\n" 
+          "--twopassMode Basic \\\n" 
+          "--outReadsUnmapped None \\\n" 
+          "--chimSegmentMin 12 \\\n" 
+          "--chimJunctionOverhangMin 12 \\\n"  
+          "--alignSJDBoverhangMin 10 \\\n" 
+          "--alignMatesGapMax 100000 \\\n" 
+          "--alignIntronMax 100000 \\\n" 
+          "--chimSegmentReadGapMax 3 \\\n"                                                                                     
+          "--alignSJstitchMismatchNmax 5 -1 5 5 \\\n" 
           "--outSAMstrandField intronMotif \\\n"
           "--outFilterIntronMotifs RemoveNoncanonical \\\n" ## added for compatibility with
           "--outFileNamePrefix {sample} \\\n"               ## cufflinks
-          "--outSAMtype BAM SortedByCoordinate\n"  
+          "--outSAMtype BAM SortedByCoordinate\n"
+          "cp *junction {outpath} \n"
           "cp *bam {outpath} \n"
           "cp *Log.* {qc_folder} ")
   cmd = cmd.format(**locals())
@@ -338,6 +348,59 @@ def star(input_files, out_file, path,outpath,sample,qc_folder,logger, logger_mut
   
   with logger_mutex:
     logger.debug("star worked")
+
+#####################################################################################################
+#___________________________________________________________________________________________________#
+#                          automatic fusion detection if star is used (I might make that default)   #
+#####################################################################################################
+
+@active_if(star_check)
+@transform(star,formatter("(?P<basedir>[/.].+)/(?P<sample>[a-zA-Z0-9_\-\.]+)/(?P<replicate>replicate_[0-9])/(?P<bam_dir>bam)/(?P<bam_file>[a-zA-Z0-9_\-\.]+$)"),
+                          add_inputs("{basedir[0]}/{sample[0]}/{replicate[0]}/bam/*.Chimeric.out.junction"),
+                          "{basedir[0]}/{sample[0]}/{replicate[0]}/bam/star-fusion.fusion_predictions.abridged.tsv",
+		          "{sample[0]}.",                                                                            #sample    ~4
+                          "{basedir[0]}/{sample[0]}/{replicate[0]}/bam",
+                          "{basedir[0]}/{sample[0]}/{replicate[0]}/qc",
+                          logger, logger_mutex)
+def star_fusion(input_files, out_file,sample, outpath,qc_folder,logger, logger_mutex):
+  fusion_input = input_files[1]
+  fusion_name = os.path.basename(fusion_input)
+  cmd = ( "source ~/.bashrc \n"
+          "module unload perl \n"
+          "module load perl/5.16.0 \n"
+          "export PERL5LIB=$PERL5LIB:/home/sejjctj/perl5/lib/perl5 \n"
+          "cd $TMPDIR \n "
+          "cp {fusion_input}  . \n "
+          "awk 'BEGIN{{OFS=\"\\t\"}}{{$1=\"chr\"$1;$4=\"chr\"$4;print $0}}' {fusion_name} > temp && mv temp {fusion_name} \n"
+          "STAR-Fusion \\\n"
+          "--genome_lib_dir /home/sejjctj/Scratch/reference/star_single_cell/fusion/GRCh38_v27_CTAT_lib_Feb092018/ctat_genome_lib_build_dir \\\n"
+          "-J {fusion_name} \\\n"
+          "--output_dir {outpath} \n" )
+
+  cmd = cmd.format(**locals())
+  #print cmd
+  try:
+    stdout_res, stderr_res = "",""
+    stdout_res, stderr_res = run_job(cmd,
+                                     job_name = "star_fusion",
+                                     job_script_directory = "/home/sejjctj/Scratch/test_dir",
+                                     job_other_options    = "-w n -S /bin/bash -l h_rt=02:00:00 -w n -l mem=24G -l tmpfs=60G  -wd /home/sejjctj/Scratch -j yes ",
+                                     #job_environment      = { 'BASH_ENV' : '/home/sejjctj/.bashrc' } ,
+                                     retain_job_scripts   = True,  # retain job scripts for debuging, they go in Scratch/test_dir
+                                     working_directory    = "/home/sejjctj/Scratch",
+                                     drmaa_session        = drmaa_session,
+                                     logger = logger )
+
+  except error_drmaa_job as err:
+    raise Exception("\n".join(map(str,
+                    ["Failed to run:",
+                     cmd,
+                     err,
+                     stdout_res,
+                     stderr_res])))
+  
+  with logger_mutex:
+    logger.debug("star_fusion worked")
 
 
 #_______________________________________________________________________________________________________
